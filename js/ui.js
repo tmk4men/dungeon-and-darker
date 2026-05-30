@@ -513,7 +513,11 @@ const UI = {
       if (this._lastRun !== html) { info.innerHTML = html; this._lastRun = html; }
     }
     const bb = document.getElementById('bagbtn');
-    if (bb && game.run) { const ct = bb.querySelector('.bag-ct'); if (ct) ct.textContent = bagFreeCells(game.run.bag) + 'マス'; }
+    if (bb && game.run) {
+      const bi = bb.querySelector('.bag-ic');
+      if (bi && typeof Sprites !== 'undefined' && Sprites.bagURL() && !this._bagIcon) { bi.innerHTML = `<img class="bag-ic-img" src="${Sprites.bagURL()}" alt="">`; this._bagIcon = true; }
+      const ct = bb.querySelector('.bag-ct'); if (ct) ct.textContent = bagFreeCells(game.run.bag) + 'マス';
+    }
     const ib = document.getElementById('interactbtn');
     if (ib) {
       const channeling = game.channel && game.channel.kind;

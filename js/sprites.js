@@ -110,6 +110,12 @@ const Sprites = {
     try { if (cv.toDataURL) u = cv.toDataURL(); } catch (e) { u = ''; }
     this._coinURL = u; return u;
   },
+  bagURL() {
+    if (this._bagURL !== undefined) return this._bagURL;
+    const cv = this.makeIcon('bag'); let u = '';
+    try { if (cv.toDataURL) u = cv.toDataURL(); } catch (e) { u = ''; }
+    this._bagURL = u; return u;
+  },
   makeSkillIcon(key) {
     const ck = 'sk|' + key; if (this.cache[ck]) return this.cache[ck];
     const rows = SKILL_ICONS[key] || SKILL_ICONS.sk_bolt;
@@ -354,6 +360,7 @@ const ICONS = {
   coin: ['...OGGGGO...', '..OGGGGGGO..', '.OGGgGGgGGO.', '.OGgGGGGgGO.', '.OGGgGGgGGO.', '..OGGGGGGO..', '...OGGGGO...'],
   gem: ['....OOOO....', '...OpPPpO...', '..OpPPPPpO..', '.OpPPPPPPpO.', '..OpPPPPpO..', '...OpPPpO...', '....OppO....', '.....OO.....'],
   crown: ['..O..O..O...', '..O..O..O...', '.OGOGOGOGO..', '.OGgGGgGGO..', '.OGGGGGGGO..', '.OOOOOOOOO..'],
+  bag: ['....OOOO....', '...OGggGO...', '..OOllllOO..', '.OlLLLLLLlO.', 'OlLLLLLLLLlO', 'OlLLLLLLLLlO', 'OlLLgggLLLlO', 'OlLLLLLLLLlO', 'OlLLLLLLLLlO', '.OlLLLLLLlO.', '..OllllllO..', '...OOOOOO...'],
 };
 function iconKey(it) {
   if (!it) return 'coin';
