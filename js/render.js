@@ -379,8 +379,9 @@ const Render = {
     const t = game.time;
     const R = portal.r;
     const open = game.runTime >= portal.openAt;
-    const col = portal.bonus ? '#ffcf6b' : '#7fd0ff';
-    const edge = portal.bonus ? '#ffe7a8' : '#aee7ff';
+    const liber = portal.bonus && game.isLiberation && game.isLiberation(portal);
+    const col = liber ? '#fff0c0' : portal.bonus ? '#ffcf6b' : '#7fd0ff';
+    const edge = liber ? '#ffffff' : portal.bonus ? '#ffe7a8' : '#aee7ff';
     ctx.save();
     ctx.translate(s.x, s.y);
     if (open) {
@@ -394,9 +395,10 @@ const Render = {
       ctx.lineWidth = 3;
       ctx.beginPath(); ctx.arc(0, 0, R * 0.7, t % TAU, t % TAU + 5); ctx.stroke();
       ctx.shadowBlur = 0;
-      ctx.fillStyle = portal.bonus ? '#fff0c8' : '#eaffff';
-      ctx.font = 'bold 12px "Cinzel", serif'; ctx.textAlign = 'center';
-      ctx.fillText(portal.bonus ? '報酬の脱出' : '脱出', 0, -R - 6);
+      if (liber) { ctx.shadowColor = '#fff'; ctx.shadowBlur = 24; ctx.strokeStyle = 'rgba(255,255,255,0.85)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(0, 0, R * 1.0 + Math.sin(t * 2) * 2, 0, TAU); ctx.stroke(); ctx.shadowBlur = 0; }
+      ctx.fillStyle = liber ? '#ffffff' : portal.bonus ? '#fff0c8' : '#eaffff';
+      ctx.font = `bold ${liber ? 13 : 12}px "Shippori Mincho B1", serif`; ctx.textAlign = 'center';
+      ctx.fillText(liber ? '解脱門' : portal.bonus ? '報酬の脱出' : '脱出', 0, -R - 6);
     } else {
       // 未開放：暗くロック表示＋カウントダウン
       ctx.fillStyle = hexA(col, 0.12);

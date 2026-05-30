@@ -115,6 +115,23 @@ const CLASSES = {
 // 廃止した職業の救済（旧セーブ → 似た職へ）
 const REMOVED_CLASS_MAP = { paladin: 'fighter', warlock: 'mage', lancer: 'rogue' };
 
+// --- 輪廻メタ：解脱（NG+）・業・徳（永続パッシブ） ---
+// 解脱門の出現条件：一定以上の深度に、業（殺生）を低く保って到達したとき
+const LIBERATION = { floor: 4, karma: 10 };
+// 転生（NG+）1回ごとのスケール
+const REBIRTH = { enemyScale: 0.18, lootLuck: 4 };
+// 徳（解脱で得た「徳」ポイントで永続強化）
+const VIRTUES = {
+  vitality:  { name: '生の徳', desc: '最大HP +8%', max: 5 },
+  fortune:   { name: '福徳',   desc: '幸運 +3（レア率）', max: 5 },
+  swift:     { name: '風の徳', desc: '移動速度 +4%', max: 3 },
+  restraint: { name: '戒の徳', desc: '業の蓄積 -20%', max: 3 },
+  scholar:   { name: '智の徳', desc: '獲得EXP +12%', max: 4 },
+  endure:    { name: '忍の徳', desc: '被ダメージ -5%', max: 4 },
+};
+const VIRTUE_ORDER = ['vitality', 'endure', 'restraint', 'fortune', 'swift', 'scholar'];
+function virtueLv(p, id) { return (p && p.virtues && p.virtues[id]) || 0; }
+
 // 職業ごとに扱える武器カテゴリ（標準武器＋相性の良い得物）。武器以外は誰でも装備可
 const CLASS_WEAPONS = {
   fighter:   ['sword', 'spear', 'mace'],
@@ -201,6 +218,7 @@ const ACHIEVEMENTS = {
   elite10: { name: 'エリートハンター', desc: 'エリートを通算10体討伐' },
   deep: { name: '深層探索者', desc: '第3層に到達する' },
   rival_slayer: { name: '果たし合い', desc: 'ライバル冒険者を討伐する' },
+  liberation: { name: '解脱', desc: '業を抑え深層から解脱門をくぐる' },
 };
 
 // --- 依頼（バウンティ）生成 ---

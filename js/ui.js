@@ -136,10 +136,11 @@ const UI = {
     const d = computeDerived(p);
     Game.derived = d;
     const cls = CLASSES[p.classId];
-    const nav = ['status', 'class', 'skill', 'equip', 'forge', 'stash', 'shop', 'bounty', 'deploy'];
-    const navName = { status: '己', class: '職業', skill: 'スキル', equip: '装備', forge: '鍛冶', stash: '倉庫', shop: 'ショップ', bounty: '請願', deploy: '出発' };
+    const nav = ['status', 'virtue', 'class', 'skill', 'equip', 'forge', 'stash', 'shop', 'bounty', 'deploy'];
+    const navName = { status: '己', virtue: '徳', class: '職業', skill: 'スキル', equip: '装備', forge: '鍛冶', stash: '倉庫', shop: 'ショップ', bounty: '請願', deploy: '出発' };
     let body = '';
     if (tab === 'status') body = this.tabStatus(p, d, cls);
+    else if (tab === 'virtue') body = this.tabVirtue(p, d);
     else if (tab === 'class') body = this.tabClass(p);
     else if (tab === 'skill') body = this.tabSkill(p, d);
     else if (tab === 'equip') body = this.tabEquip(p, d);
@@ -210,6 +211,7 @@ const UI = {
             <div class="char-sub">Lv.${p.level} ・ 得物 ${WEAPON_TYPES[cls.weapon].name}</div>
             <div class="char-flavor">${cls.blurb}</div>
             <div class="char-rec">脱出 ${p.runStats.extracts}　頓死 ${p.runStats.deaths}　調伏 ${p.runStats.kills}</div>
+            <div class="char-rec">転生 ${p.rebirths || 0}　徳 ${p.merit || 0}${(p.rebirths || 0) > 0 ? `　<span style="color:var(--gold-bright)">魔威 +${Math.round((p.rebirths || 0) * REBIRTH.enemyScale * 100)}%</span>` : ''}</div>
           </div>
         </div>
         <div class="card">
@@ -225,6 +227,28 @@ const UI = {
         </div>
       </div>
     </div>`;
+  },
+
+  // -------- 徳（解脱で得た永続パッシブ） --------
+  tabVirtue(p, d) {
+    const merit = p.merit || 0, reb = p.rebirths || 0;
+    const rows = VIRTUE_ORDER.map(id => {
+      const v = VIRTUES[id]; const lv = virtueLv(p, id); const maxed = lv >= v.max;
+      return `<div class="inv-row">
+        <div><span class="rar" style="color:var(--gold-bright)">${v.name}</span> <span class="slot-tag">${lv}/${v.max}</span>
+          <div class="eq-stat">${v.desc}（現在 +${lv}段）</div></div>
+        ${maxed ? '<span class="muted">極</span>' : `<button class="btn sm vbuy ${merit >= 1 ? '' : 'poor'}" data-v="${id}">徳1で授かる</button>`}
+      </div>`;
+    }).join('');
+    return `<div class="card">
+        <h3>輪廻と解脱</h3>
+        <div class="virtue-meta">
+          <div class="vm"><span>転生</span><b>${reb}</b></div>
+          <div class="vm"><span>徳</span><b class="${merit > 0 ? 'hot' : ''}">${merit}</b></div>
+        </div>
+        <p class="muted">業（殺生）を抑えて深層（第${LIBERATION.floor}層以降）に至り、<b>解脱門（報酬ポータル）</b>をくぐると転生し「徳」を授かる。徳は転生しても永遠に積み上がる。</p>
+      </div>
+      <div class="card"><h3>徳を授かる</h3>${rows}</div>`;
   },
 
   tabBounty(p, d) {
@@ -460,6 +484,16 @@ const UI = {
         this.toast('報酬 ' + fmt(bt.reward) + ' を受け取った');
         reload();
       }
+    }));
+    // 徳を授かる
+    this.root.querySelectorAll('.vbuy').forEach(b => b.addEventListener('click', () => {
+      const id = b.dataset.v, v = VIRTUES[id]; const lv = virtueLv(p, id);
+      if ((p.merit || 0) < 1) { this.toast('徳が足りない（解脱で得る）'); return; }
+      if (lv >= v.max) return;
+      if (!p.virtues) p.virtues = {};
+      p.virtues[id] = lv + 1; p.merit -= 1;
+      Audio2.play && Audio2.play('levelup');
+      reload();
     }));
     // 出撃
     this.root.querySelectorAll('.enterdungeon').forEach(b => b.addEventListener('click', () => { this.hideAll(); Game.enterDungeon(); }));
@@ -707,12 +741,14 @@ const UI = {
     this.root.querySelectorAll('.unequip').forEach(b => b.addEventListener('click', () => { Game.bagUnequip(b.closest('.eqrow').dataset.slot); refresh(); }));
   },
 
-  showExtract(prog, bonus) {
+  showExtract(prog, bonus, liberated) {
     const el = document.getElementById('extract');
     if (!el) return;
     if (prog <= 0) { el.style.display = 'none'; return; }
     el.style.display = 'block';
-    el.innerHTML = `<div class="exlabel">${bonus ? '報酬ポータルで脱出中…' : '脱出中…'}</div><div class="exbar"><div style="width:${prog * 100}%;${bonus ? 'background:linear-gradient(90deg,#ffce6b,#fff0c8)' : ''}"></div></div>`;
+    const label = liberated ? '解脱の門をくぐる…' : bonus ? '報酬ポータルで脱出中…' : '脱出中…';
+    const barBg = liberated ? 'background:linear-gradient(90deg,#ffe6a8,#ffffff)' : bonus ? 'background:linear-gradient(90deg,#ffce6b,#fff0c8)' : '';
+    el.innerHTML = `<div class="exlabel ${liberated ? 'liber' : ''}">${label}</div><div class="exbar"><div style="width:${prog * 100}%;${barBg}"></div></div>`;
   },
 
   flashDamage() {
@@ -736,19 +772,21 @@ const UI = {
     const lootHtml = data.loot.length ? data.loot.map(it => `<div class="res-item">${this.rarityTag(it)}</div>`).join('') : '<div class="muted">なし</div>';
     let lostHtml = '';
     if (!win && data.lost && data.lost.length) lostHtml = `<div class="card lost"><h3>失った物</h3>${data.lost.map(it => `<div class="res-item">${this.rarityTag(it)}</div>`).join('')}</div>`;
-    this.panel(`<div class="screen result ${win ? 'win' : 'lose'}">
-      ${win ? '' : '<div class="samsara"><span></span><span></span><span></span></div>'}
-      <h1 class="res-title">${win ? '生還' : '輪廻'}</h1>
-      <p class="subtitle">${win ? realmName(Game.floor) + 'より戦利品を持ち帰った。' : '持ち込んだ全てを失い、再び人間界へ還る。だが業（カルマ）は経験として残る。'}</p>
+    const lib = win && data.liberated;
+    this.panel(`<div class="screen result ${lib ? 'liberated' : win ? 'win' : 'lose'}">
+      ${!win || lib ? '<div class="samsara"><span></span><span></span><span></span></div>' : ''}
+      <h1 class="res-title">${lib ? '解脱' : win ? '生還' : '輪廻'}</h1>
+      <p class="subtitle">${lib ? '業を断ち、六道の輪より抜け出た。徳を携え、新たな生へと転生する。' : win ? realmName(Game.floor) + 'より戦利品を持ち帰った。' : '持ち込んだ全てを失い、再び人間界へ還る。だが業（カルマ）は経験として残る。'}</p>
       <div class="res-stats">
         <div><span>撃破数</span><b>${data.kills}</b></div>
         <div><span>獲得</span><b>${win ? '+' + this.gold(data.gold) : '0'}</b></div>
         <div><span>獲得EXP</span><b>+${data.xp}</b></div>
         ${data.leveled ? `<div><span>レベルUP</span><b class="hot">+${data.leveled}</b></div>` : ''}
+        ${lib ? `<div><span>授かった徳</span><b class="hot">+${data.meritGain}</b></div><div><span>転生</span><b class="hot">${data.rebirths}</b></div>` : ''}
       </div>
       <div class="card"><h3>${win ? '持ち帰った戦利品' : '失われた戦利品'}</h3>${lootHtml}</div>
       ${lostHtml}
-      <button class="btn big totown">伽藍へ還る</button>
+      <button class="btn big totown">${lib ? '転生する' : '伽藍へ還る'}</button>
     </div>`);
     const tt = this.root.querySelector('.totown'); if (tt) tt.addEventListener('click', () => Game.goTown());
   },

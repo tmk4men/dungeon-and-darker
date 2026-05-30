@@ -18,6 +18,9 @@ function newProfile(classId) {
     runStats: { runs: 0, extracts: 0, deaths: 0, kills: 0, gold: 0, elites: 0 },
     achievements: {},
     bounties: [],
+    rebirths: 0,        // 転生（解脱）回数 = NG+
+    merit: 0,           // 徳ポイント（解脱で獲得）
+    virtues: {},        // 購入した徳（id→段数）
   };
   // 初期装備：職業の標準武器＋トーチ＋ポーション
   const wmap = { sword: 'w_sword', hammer: 'w_hammer', dagger: 'w_dagger', mace: 'w_mace', bow: 'w_bow', staff: 'w_staff', spear: 'w_spear', tome: 'w_tome', flail: 'w_flail' };
@@ -48,9 +51,12 @@ function grantXP(p, amount) {
 function computeDerived(p) {
   const cls = CLASSES[p.classId];
   const equip = sumEquipStats(p.equipment);
-  // 一次ステータス = 基礎割り振り + 装備補正
+  // 徳（永続パッシブ）
+  const vVit = virtueLv(p, 'vitality'), vSwift = virtueLv(p, 'swift'), vEnd = virtueLv(p, 'endure'), vFor = virtueLv(p, 'fortune');
+  // 一次ステータス = 基礎割り振り + 装備補正 + 徳（福徳=幸運）
   const attr = {};
   for (const a of ATTRS) attr[a.key] = (p.baseAttrs[a.key] || 0) + (equip[a.key] || 0);
+  attr.LUCK += vFor * 3;
 
   const weapon = p.equipment.weapon;
   const wtype = weapon ? WEAPON_TYPES[weapon.wtype] : WEAPON_TYPES[cls.weapon];
@@ -65,12 +71,13 @@ function computeDerived(p) {
     attr,
     wtype, weaponItem: weapon,
     weight, weightCap, encPenalty, encumbered: over > 0,
-    hpmax: Math.round(60 + attr.VIG * 8 + (equip.hpmax || 0)),
+    hpmax: Math.round((60 + attr.VIG * 8 + (equip.hpmax || 0)) * (1 + vVit * 0.08)),
     mpmax: Math.round(36 + attr.WILL * 4 + attr.WIS * 2 + (equip.mpmax || 0)),
     patkFlat: (equip.patk || 0),
     matkFlat: (equip.matk || 0),
     defense: Math.round(attr.VIG * 0.3 + (equip.defense || 0)),
-    speed: 130 * (1 + attr.AGI * 0.02) * (1 - encPenalty),
+    speed: 130 * (1 + attr.AGI * 0.02) * (1 - encPenalty) * (1 + vSwift * 0.04),
+    damageReduce: clamp(vEnd * 0.05, 0, 0.4),
     atkSpeedMult: 1 / (1 + attr.AGI * 0.022),
     crit: clamp((wtype.crit || 0) + attr.DEX * 0.004 + attr.LUCK * 0.003 + (equip.crit || 0), 0, 0.75),
     critDmg: 1.5 + attr.LUCK * 0.02,

@@ -84,6 +84,9 @@ const Game = {
       if (!this.profile.achievements) this.profile.achievements = {};
       if (!this.profile.bounties) this.profile.bounties = [];
       if (!this.profile.runStats.elites) this.profile.runStats.elites = 0;
+      if (typeof this.profile.rebirths !== 'number') this.profile.rebirths = 0;
+      if (typeof this.profile.merit !== 'number') this.profile.merit = 0;
+      if (!this.profile.virtues) this.profile.virtues = {};
       if (!this.profile.loadout || !this.profile.loadout.length) this.profile.loadout = (CLASS_SKILL_POOL[this.profile.classId] || CLASSES[this.profile.classId].skills).slice(0, 3);
       if (this.profile.bounties.length < 3) {
         const need = 3 - this.profile.bounties.length;
@@ -160,7 +163,7 @@ const Game = {
 
   makeEnemy(type, x, y, forceElite) {
     const def = ENEMIES[type];
-    const sc = 1 + (this.floor - 1) * 0.16;
+    const sc = 1 + (this.floor - 1) * 0.16 + (this.profile.rebirths || 0) * REBIRTH.enemyScale;
     const e = {
       type, x, y, vx: 0, vy: 0, facing: rand(0, TAU),
       maxhp: Math.round(def.hp * sc), hp: Math.round(def.hp * sc),
@@ -509,8 +512,8 @@ const Game = {
     this.hitStop = Math.max(this.hitStop, def.boss ? 0.12 : 0.04);
     this.addShake(def.boss ? 16 : (e.elite ? 7 : 3));
     this.run.kills++;
-    // 業（カルマ）：殺生で蓄積
-    this.run.karma += def.boss ? 10 : (e.elite ? 3 : 1);
+    // 業（カルマ）：殺生で蓄積。戒の徳で蓄積を抑える
+    this.run.karma += (def.boss ? 10 : (e.elite ? 3 : 1)) * (1 - virtueLv(this.profile, 'restraint') * 0.20);
     // 実績・依頼
     this.progressBounty('kills', 1);
     if (def.boss) { this.unlockAch('boss_slayer'); this.progressBounty('boss', 1); }
@@ -529,7 +532,7 @@ const Game = {
     const dropChance = def.boss ? 1 : (e.elite || e.rival ? 1 : 0.4);
     if (Math.random() < dropChance) {
       const n = def.boss ? 3 : (e.rival ? 3 : e.elite ? 2 : 1);
-      const luckBonus = (def.boss ? 8 : e.rival ? 6 : e.elite ? 5 : 0) + this.karmaTier() * 2;
+      const luckBonus = (def.boss ? 8 : e.rival ? 6 : e.elite ? 5 : 0) + this.karmaTier() * 2 + (this.profile.rebirths || 0) * REBIRTH.lootLuck;
       for (let i = 0; i < n; i++) {
         this.groundItems.push({ x: e.x + rand(-14, 14), y: e.y + rand(-14, 14), item: randomLoot(this.floor + (e.elite || e.rival ? 1 : 0), this.derived.attr.LUCK + luckBonus) });
       }
@@ -549,6 +552,7 @@ const Game = {
     if (p.dead || p.invuln > 0) return;
     if (Math.random() < d.dodge) { this.addFloat(p.x, p.y - 24, '回避', '#aef', 14); p.invuln = 0.15; return; }
     let dmg = amount * (1 + this.karmaTier() * 0.12); // 業が深いほど獄卒が強くなる
+    dmg *= (1 - (d.damageReduce || 0));               // 忍の徳
     if (magic) dmg *= (1 - d.magicResist);
     let defense = d.defense;
     for (const b of p.buffs) if (b.stat === 'defense') defense *= b.mult;
@@ -1005,7 +1009,7 @@ const Game = {
     }
     if (active) {
       this.extractT += dt;
-      UI.showExtract(clamp(this.extractT / 2.2, 0, 1), active.bonus);
+      UI.showExtract(clamp(this.extractT / 2.2, 0, 1), active.bonus, this.isLiberation(active));
       if (this.extractT >= 2.2) this.extract(active);
     } else {
       if (this.extractT > 0) UI.showExtract(0);
@@ -1162,7 +1166,7 @@ const Game = {
     this.profile.runStats.runs++;
     this.profile.runStats.kills += this.run.kills;
     // 死亡時もEXPは半分だけ
-    const xp = Math.round(this.run.kills * 6 + this.floor * 10);
+    const xp = Math.round((this.run.kills * 6 + this.floor * 10) * (1 + virtueLv(this.profile, 'scholar') * 0.12));
     grantXP(this.profile, xp);
     saveProfile(this.profile);
     Audio2.stopAmbient();
@@ -1170,22 +1174,37 @@ const Game = {
     UI.showResult(false, { kills: this.run.kills, gold: 0, xp, lost, loot: this.run.bag.items.map(e => e.item) });
   },
 
+  // 解脱の条件：報酬ポータルが「解脱門」化しているか（深層＋低業）
+  isLiberation(portal) {
+    return !!(portal && portal.bonus && this.floor >= LIBERATION.floor && this.run && this.run.karma <= LIBERATION.karma);
+  },
+
   extract(portal) {
     this.state = 'result';
     Input.enabled = false;
+    const liberated = this.isLiberation(portal);
     // 報酬ポータルはボーナス（ゴールド＋戦利品）
     if (portal && portal.bonus) {
       this.run.gold = Math.round(this.run.gold * 1.6 + 40);
       const extra = randomLoot(this.floor + 1, this.derived.attr.LUCK + 8);
       this.bagAdd(extra) || stashAddItem(this.profile, extra);
-      this.toast('報酬ポータルで脱出！ボーナス獲得');
+      this.toast(liberated ? '解脱の門をくぐった' : '報酬ポータルで脱出！ボーナス獲得');
+    }
+    // 解脱：転生（NG+）＋徳を得る
+    let meritGain = 0;
+    if (liberated) {
+      meritGain = 1 + Math.floor((this.floor - LIBERATION.floor) / 2); // 深いほど徳が多い
+      this.profile.rebirths = (this.profile.rebirths || 0) + 1;
+      this.profile.merit = (this.profile.merit || 0) + meritGain;
+      this.unlockAch('liberation');
     }
     // 取得品をストレージへ、ゴールド加算
     for (const e of this.run.bag.items) stashAddItem(this.profile, e.item);
     this.profile.gold += this.run.gold;
     // 道中で使用/取得したポーションの状態を反映
     this.profile.potions = this.player.potions.map(x => x || null);
-    const xp = Math.round(this.run.kills * 10 + this.floor * 25 + this.bagCount() * 5);
+    let xp = Math.round(this.run.kills * 10 + this.floor * 25 + this.bagCount() * 5);
+    xp = Math.round(xp * (1 + virtueLv(this.profile, 'scholar') * 0.12)); // 智の徳
     const leveled = grantXP(this.profile, xp);
     // 実績・依頼
     this.unlockAch('first_extract');
@@ -1201,11 +1220,11 @@ const Game = {
     this.profile.runStats.kills += this.run.kills;
     this.profile.runStats.gold += this.run.gold;
     saveProfile(this.profile);
-    this.burst(this.player.x, this.player.y, '#7fd0ff', 30);
+    this.burst(this.player.x, this.player.y, liberated ? '#ffe6a8' : '#7fd0ff', liberated ? 44 : 30);
     Audio2.stopAmbient();
-    Audio2.play('extract');
-    if (leveled) setTimeout(() => Audio2.play('levelup'), 500);
-    UI.showResult(true, { kills: this.run.kills, gold: this.run.gold, xp, leveled, loot: this.run.bag.items.map(e => e.item) });
+    Audio2.play(liberated ? 'levelup' : 'extract');
+    if (leveled && !liberated) setTimeout(() => Audio2.play('levelup'), 500);
+    UI.showResult(true, { kills: this.run.kills, gold: this.run.gold, xp, leveled, liberated, meritGain, rebirths: this.profile.rebirths, loot: this.run.bag.items.map(e => e.item) });
   },
 
   abandon() {

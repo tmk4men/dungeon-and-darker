@@ -287,6 +287,18 @@ button { font-family: inherit; cursor: pointer; color: var(--ink); }
 .res-stats b { font-size: 24px; color: var(--ink); font-family: var(--f-head); } .res-stats b.hot { color: var(--ember); }
 .res-item { display: inline-block; margin: 4px; padding: 7px 11px; background: rgba(20,15,8,.7); border: 1px solid var(--line); border-radius: 3px; }
 .card.lost { border-color: #5a241e; } .card.lost h3 { color: var(--hp); }
+/* 解脱（NG+）リザルト */
+.result.liberated .res-title { color: #fff; text-shadow: 0 0 44px rgba(255,240,200,.85), 0 0 14px rgba(255,255,255,.6); }
+.result.liberated .samsara { opacity: .85; }
+.result.liberated .samsara span:nth-child(1) { border-color: rgba(255,240,200,.7); }
+.result.liberated .samsara span:nth-child(2) { border-color: rgba(255,255,255,.75); }
+.result.liberated .samsara span:nth-child(3) { border-color: rgba(255,224,170,.7); }
+/* 徳タブのメタ表示 */
+.virtue-meta { display: flex; gap: 14px; margin-bottom: 12px; }
+.vm { background: linear-gradient(180deg, var(--panel2), var(--panel)); border: 1px solid var(--line2); border-radius: 4px; padding: 8px 18px; min-width: 84px; text-align: center; }
+.vm span { display: block; font-size: 10px; color: var(--muted); letter-spacing: 1px; font-family: var(--f-head); text-transform: uppercase; }
+.vm b { font-size: 23px; font-family: var(--f-head); color: var(--ink); } .vm b.hot { color: var(--gold-bright); text-shadow: 0 0 10px rgba(236,205,126,.5); }
+.exlabel.liber { color: #fff; text-shadow: 0 0 14px rgba(255,240,200,.85); }
 
 /* ===== バッグ（マス制インベントリ） ===== */
 .bag-screen { width: 100%; max-width: 980px; max-height: 96vmin; margin: auto; display: flex; flex-direction: column;
