@@ -122,15 +122,33 @@ function randomLoot(floor, luck, opts = {}) {
 // --- アイテムの占有サイズ [w,h] ---
 function itemSize(it) {
   if (!it) return [1, 1];
-  if (it.slot === 'weapon') return it.wtype === 'dagger' ? [1, 1] : [1, 2];
-  if (it.slot === 'chest') return [2, 2];
+  if (it.slot === 'weapon') {
+    if (it.wtype === 'dagger') return [1, 1];
+    if (it.wtype === 'hammer' || it.wtype === 'flail') return [2, 2]; // 大型武器
+    return [1, 2];
+  }
+  if (it.slot === 'chest') return it.baseId === 'a_plate' ? [2, 2] : [1, 2]; // プレートは大型
   if (it.slot === 'legs') return [2, 1];
-  if (it.slot === 'treasure') { if (it.baseId === 'tr_crown') return [2, 1]; if (it.baseId === 'tr_goblet') return [1, 2]; return [1, 1]; }
+  if (it.slot === 'head') return it.baseId === 'a_helm' ? [1, 1] : [1, 1];
+  if (it.slot === 'treasure') { if (it.baseId === 'tr_crown') return [2, 1]; if (it.baseId === 'tr_goblet') return [2, 2]; return [1, 1]; }
   return [1, 1];
 }
 
 // --- マス制バッグ ---
 function newBag() { return { w: CONFIG.BAG_W, h: CONFIG.BAG_H, items: [] }; }
+function newStash() { return { w: CONFIG.STASH_W, h: CONFIG.STASH_H, items: [] }; }
+// 旧セーブ（配列）→ グリッド倉庫へ移行
+function migrateStash(stash) {
+  if (stash && stash.items && typeof stash.w === 'number') return stash; // 既にグリッド
+  const sb = newStash();
+  if (Array.isArray(stash)) for (const it of stash) { if (it && !bagAddItem(sb, it)) { sb.h += 2; bagAddItem(sb, it); } } // 入らなければ拡張
+  return sb;
+}
+function stashItems(p) { return p.stash.items.map(e => e.item); }
+function stashAddItem(p, item) { let ok = bagAddItem(p.stash, item); if (!ok) { p.stash.h += 2; ok = bagAddItem(p.stash, item); } return ok; }
+function stashRemoveItem(p, item) { const e = p.stash.items.find(e => e.item === item); if (e) bagRemoveItem(p.stash, e); }
+function stashMove(p, e, x, y) { if (bagFits(p.stash, x, y, e.w, e.h, e)) { e.x = x; e.y = y; return true; } return false; }
+function stashRotate(p, e) { const nw = e.h, nh = e.w; if (nw === e.w) return false; if (bagFits(p.stash, e.x, e.y, nw, nh, e)) { e.w = nw; e.h = nh; return true; } return false; }
 function bagOccExcept(bag, ignore) {
   const o = new Array(bag.w * bag.h).fill(false);
   for (const e of bag.items) { if (e === ignore) continue; for (let dy = 0; dy < e.h; dy++) for (let dx = 0; dx < e.w; dx++) { const cx = e.x + dx, cy = e.y + dy; if (cx < bag.w && cy < bag.h) o[cy * bag.w + cx] = true; } }

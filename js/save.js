@@ -14,7 +14,7 @@ function newProfile(classId) {
     baseAttrs: { ...cls.base },          // 職業基礎＋レベルで割り振った分
     equipment: { weapon: null, head: null, chest: null, hands: null, legs: null, ring: null, torch: null },
     potions: new Array(CONFIG.POTION_SLOTS).fill(null),
-    stash: [],
+    stash: newStash(),
     runStats: { runs: 0, extracts: 0, deaths: 0, kills: 0, gold: 0, elites: 0 },
     achievements: {},
     bounties: [],
@@ -26,7 +26,7 @@ function newProfile(classId) {
   p.equipment.chest = createItem(['staff', 'tome'].includes(cls.weapon) ? 'a_robe' : 'a_tunic', 'common');
   p.potions[0] = createItem('p_hp', 'common');
   if (['mage', 'cleric'].includes(classId)) p.potions[1] = createItem('p_mp', 'common');
-  p.stash.push(createItem('p_hp', 'common'));
+  bagAddItem(p.stash, createItem('p_hp', 'common'));
   return p;
 }
 

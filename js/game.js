@@ -69,7 +69,7 @@ const Game = {
       if (!this.profile.baseAttrs) this.profile.baseAttrs = { ...cls.base };
       if (!this.profile.equipment) this.profile.equipment = { weapon: null, head: null, chest: null, hands: null, legs: null, ring: null, torch: null };
       if (!Array.isArray(this.profile.potions)) this.profile.potions = new Array(CONFIG.POTION_SLOTS).fill(null);
-      if (!Array.isArray(this.profile.stash)) this.profile.stash = [];
+      this.profile.stash = migrateStash(this.profile.stash);
       if (!this.profile.runStats) this.profile.runStats = { runs: 0, extracts: 0, deaths: 0, kills: 0, gold: 0, elites: 0 };
       if (typeof this.profile.gold !== 'number') this.profile.gold = 0;
       if (!this.profile.level) { this.profile.level = 1; this.profile.xp = 0; this.profile.points = 0; }
@@ -118,7 +118,6 @@ const Game = {
     Input.aimChange = (ang) => { this.player.facing = ang; };
     UI.showHUD();
     UI.buildSkillBar(this);
-    this.toast(realmName(this.floor) + 'へ踏み入る — 生きて還れ');
   },
 
   // 現在の深度でレベルを生成（プレイヤー状態は維持）
@@ -148,7 +147,6 @@ const Game = {
     this.player.derived = this.derived;
     this.buildLevel();
     Audio2.play('door');
-    this.toast(realmName(this.floor) + 'へ堕ちた — 魔も宝も深まる');
   },
 
   makeEnemy(type, x, y, forceElite) {
@@ -628,7 +626,6 @@ const Game = {
       const alive = this.enemies.reduce((n, x) => n + (x.dead ? 0 : 1), 0);
       if (e.summonCd <= 0 && alive < 28) {
         e.summonCd = 7;
-        this.toast('ネクロマンサーが死霊を呼んだ！');
         for (let i = 0; i < 2; i++) {
           const minion = this.makeEnemy(chance(0.5) ? 'skeleton' : 'skel_archer', e.x + rand(-40, 40), e.y + rand(-40, 40));
           minion.state = 'chase';
@@ -724,7 +721,6 @@ const Game = {
     e.special = map[e.type] || 'fan';
     e.windT = 0.85; e.windMax = 0.85;
     e.specialCd = rand(7, 10);
-    this.toast(def.name + ' が技を繰り出す');
     Audio2.play('zone');
   },
 
@@ -863,12 +859,10 @@ const Game = {
       if (tx >= r.x - 1 && tx <= r.x + r.w && ty >= r.y - 1 && ty <= r.y + r.h) r.revealed = true;
     }
     Audio2.play('door');
-    this.toast('扉を開けた');
   },
 
   openChest(c) {
     c.opened = true;
-    this.toast('宝箱を開けた — 中身をバッグへ');
     Audio2.play('chest');
     this.burst(c.x, c.y, '#ffd27a', 18);
     c.contents = [];
@@ -993,7 +987,7 @@ const Game = {
       this.addFloat(p.x, p.y - 30, '-' + cost + ' HP', '#ff6a5a', 16);
       this.burst(a.x, a.y, '#ff5b6e', 24);
       for (let i = 0; i < 3; i++) this.groundItems.push({ x: a.x + rand(-26, 26), y: a.y + rand(-26, 26), item: randomLoot(this.floor + 1, this.derived.attr.LUCK + 6) });
-      this.toast('生贄の祭壇：戦利品が現れた！');
+      this.toast('戦利品が現れた');
       Audio2.play('chest');
     } else {
       a.used = true;
@@ -1131,11 +1125,11 @@ const Game = {
     if (portal && portal.bonus) {
       this.run.gold = Math.round(this.run.gold * 1.6 + 40);
       const extra = randomLoot(this.floor + 1, this.derived.attr.LUCK + 8);
-      this.bagAdd(extra) || this.profile.stash.push(extra);
+      this.bagAdd(extra) || stashAddItem(this.profile, extra);
       this.toast('報酬ポータルで脱出！ボーナス獲得');
     }
     // 取得品をストレージへ、ゴールド加算
-    for (const e of this.run.bag.items) this.profile.stash.push(e.item);
+    for (const e of this.run.bag.items) stashAddItem(this.profile, e.item);
     this.profile.gold += this.run.gold;
     // 道中で使用/取得したポーションの状態を反映
     this.profile.potions = this.player.potions.map(x => x || null);

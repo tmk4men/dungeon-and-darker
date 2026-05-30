@@ -220,7 +220,7 @@ const UI = {
           ${b.done && !b.claimed ? `<button class="btn sm claim" data-id="${b.id}">報酬を受け取る</button>` : b.claimed ? '<span class="muted">受取済</span>' : '<span class="muted">進行中…</span>'}</div>
       </div>`;
     }).join('');
-    return `<div class="card"><h3>依頼ボード</h3><p class="muted">ダンジョンでの成果は自動で記録されます。達成した依頼の報酬を受け取ると、新しい依頼に切り替わります。</p></div>${rows}`;
+    return `<div class="card"><h3>依頼</h3></div>${rows}`;
   },
 
   tabSkill(p, d) {
@@ -236,14 +236,13 @@ const UI = {
       </div>`;
     }).join('');
     return `<div class="card"><h3>スキル選択 — 2つまで装備（現在 ${p.loadout.length}/2）</h3>
-      <p class="muted">ここで選んだ2つがダンジョンで使えます。スキル未選択時の右スティックは標準武器の通常攻撃です。</p>
       <div class="skill-grid">${cards}</div></div>`;
   },
 
   tabForge(p, d) {
     const items = [];
     for (const slot in p.equipment) if (p.equipment[slot]) items.push({ it: p.equipment[slot], where: '装備中' });
-    for (const it of p.stash) if (canUpgrade(it) || canEnchant(it)) items.push({ it, where: '倉庫' });
+    for (const it of stashItems(p)) if (canUpgrade(it) || canEnchant(it)) items.push({ it, where: '倉庫' });
     if (!items.length) return `<div class="card"><div class="muted">強化できる装備がありません。武器・防具を入手しましょう。</div></div>`;
     const rows = items.map(({ it, where }) => {
       const upOk = canUpgrade(it), enOk = canEnchant(it);
@@ -254,8 +253,7 @@ const UI = {
           ${enOk ? `<button class="btn sm ench ${p.gold >= enchantCost(it) ? '' : 'poor'}" data-uid="${it.uid}">エンチャント（${this.gold(enchantCost(it))}）</button>` : ''}
         </div></div>`;
     }).join('');
-    return `<div class="card"><h3>鍛冶屋 — 強化／エンチャント</h3>
-      <p class="muted">強化（最大+5）で全ステータス上昇。エンチャント（最大2回）でランダムなステータスを付与。装備中の品もそのまま強化できます。</p>${rows}</div>`;
+    return `<div class="card"><h3>鍛冶屋 — 強化／エンチャント</h3>${rows}</div>`;
   },
 
   tabEquip(p, d) {
@@ -273,7 +271,7 @@ const UI = {
       ${it ? `<div class="eq-item">${this.rarityTag(it)}<button class="btn sm potoff" data-i="${i}">外す</button></div>` : `<div class="eq-empty">— なし —</div>`}
     </div>`).join('');
     // 装備可能な倉庫アイテム
-    const equippable = p.stash.filter(it => ['weapon', 'head', 'chest', 'hands', 'legs', 'ring', 'torch'].includes(it.slot));
+    const equippable = stashItems(p).filter(it => ['weapon', 'head', 'chest', 'hands', 'legs', 'ring', 'torch'].includes(it.slot));
     const list = equippable.length ? equippable.map(it => `<div class="inv-row">
         <div>${this.rarityTag(it)} <span class="slot-tag">${SLOT_NAMES[it.slot]}</span>
           <div class="eq-stat">${statLine(it.stats)}</div>
@@ -287,17 +285,23 @@ const UI = {
   },
 
   tabStash(p, d) {
-    if (!p.stash.length) return `<div class="card"><div class="muted">倉庫は空です。ダンジョンで戦利品を集めましょう。</div></div>`;
-    const rows = p.stash.slice().sort((a, b) => RARITY_ORDER.indexOf(b.rarity) - RARITY_ORDER.indexOf(a.rarity)).map(it => `<div class="inv-row">
-      <div>${this.rarityTag(it)} <span class="slot-tag">${SLOT_NAMES[it.slot] || (it.slot === 'potion' ? 'ポーション' : '財宝')}</span>
-        <div class="eq-stat">${it.potion ? (it.potion.hp ? 'HP+' + it.potion.hp : '') + (it.potion.mp ? ' MP+' + it.potion.mp : '') : statLine(it.stats)}</div></div>
-      <div class="inv-act">
-        <span class="val">${this.gold(Math.round(it.value * 0.6))}</span>
-        ${['weapon', 'head', 'chest', 'hands', 'legs', 'ring', 'torch'].includes(it.slot) ? `<button class="btn sm equip" data-uid="${it.uid}">装備</button>` : ''}
-        ${it.slot === 'potion' ? `<button class="btn sm topotion" data-uid="${it.uid}">枠へ</button>` : ''}
-        <button class="btn sm danger sell" data-uid="${it.uid}">売却</button>
-      </div></div>`).join('');
-    return `<div class="card"><h3>倉庫（安全に保管）</h3>${rows}</div>`;
+    const bag = p.stash; const ic = (it) => { const u = Sprites.iconURL(it); return u ? `<img class="bag-ic" src="${u}" alt="">` : ''; };
+    let cells = '';
+    for (let y = 0; y < bag.h; y++) for (let x = 0; x < bag.w; x++) cells += `<div class="bag-cell" data-x="${x}" data-y="${y}" style="grid-column:${x + 1};grid-row:${y + 1}"></div>`;
+    let items = '';
+    for (let k = 0; k < bag.items.length; k++) { const e = bag.items[k]; const selc = (this.stashSel === e) ? 'sel' : ''; items += `<div class="bag-item ${selc}" data-k="${k}" style="grid-column:${e.x + 1}/span ${e.w};grid-row:${e.y + 1}/span ${e.h};--rc:${RARITY[e.item.rarity].color}">${ic(e.item)}</div>`; }
+    const sel = this.stashSel && bag.items.includes(this.stashSel) ? this.stashSel : null;
+    let act = '';
+    if (sel) {
+      const it = sel.item; const eq = ['weapon', 'head', 'chest', 'hands', 'legs', 'ring', 'torch'].includes(it.slot);
+      act = `<div class="bag-actions">${this.rarityTag(it)}
+        ${sel.w !== sel.h ? '<button class="btn sm srot">回転</button>' : ''}
+        ${eq ? '<button class="btn sm sequip">装備</button>' : ''}
+        ${it.slot === 'potion' ? '<button class="btn sm stopot">薬枠へ</button>' : ''}
+        <button class="btn sm ssell">売却 ${this.gold(Math.round(it.value * 0.6))}</button></div>`;
+    }
+    return `<div class="card"><h3>倉庫</h3>
+      <div class="bag-grid stash-grid" style="grid-template-columns:repeat(${bag.w},1fr);grid-template-rows:repeat(${bag.h},1fr);aspect-ratio:${bag.w}/${bag.h}">${cells}${items}</div>${act}</div>`;
   },
 
   tabShop(p, d) {
@@ -307,7 +311,8 @@ const UI = {
         <div class="eq-stat">${it.potion ? (it.potion.hp ? 'HP+' + it.potion.hp : '') + (it.potion.mp ? ' MP+' + it.potion.mp : '') : statLine(it.stats)}</div></div>
       <button class="btn sm buy" data-uid="${it.uid}">${this.gold(this.buyPrice(it))} 購入</button>
     </div>`).join('');
-    const sellList = p.stash.length ? p.stash.map(it => `<div class="inv-row">
+    const ss = stashItems(p);
+    const sellList = ss.length ? ss.map(it => `<div class="inv-row">
       <div>${this.rarityTag(it)}</div>
       <button class="btn sm danger sell" data-uid="${it.uid}">${this.gold(Math.round(it.value * 0.6))} 売却</button>
     </div>`).join('') : '<div class="muted">売る物がありません</div>';
@@ -327,13 +332,12 @@ const UI = {
         <p class="muted">装備スキル：${lo}</p>
         <p class="muted">持ち込む装備：${eq}</p>
         <p class="muted">ポーション：${pot}</p>
-        <p class="warn">死亡すると持ち込んだ装備・ポーション・取得品は全て失われます。脱出ポータルから帰還して初めて戦利品が確定します。</p>
+        <p class="warn">死亡で持ち込み品は全ロスト。脱出して持ち帰れ。</p>
       </div></div>
       <div class="col"><div class="card">
         <h3>出撃</h3>
         <button class="btn big enterdungeon">ダンジョンへ潜入</button>
-        <p class="muted" style="margin-top:10px">ひとつながりのダンジョンです。各階にある<b>「下り階段」</b>で深く潜るほど、敵が強くなり戦利品のレア度とゴールドが増えます。脱出ポータルからはいつでも帰還でき、深く潜ってから帰るほど高リスク高報酬です。</p>
-        <p class="muted" style="margin-top:8px">操作：左スティック＝移動／右スティック＝攻撃・狙う／扉・宝箱は近づいて「開ける」ボタン（離れると中断）。</p>
+        <p class="muted">下り階段で深く潜るほど強敵・高レア・高報酬。</p>
       </div></div>
     </div>`;
   },
@@ -363,30 +367,39 @@ const UI = {
     // 装備
     this.root.querySelectorAll('.equip').forEach(b => b.addEventListener('click', () => { this.equipItem(+b.dataset.uid); reload(); }));
     this.root.querySelectorAll('.unequip').forEach(b => b.addEventListener('click', () => {
-      const s = b.dataset.slot; if (p.equipment[s]) { p.stash.push(p.equipment[s]); p.equipment[s] = null; } reload();
+      const s = b.dataset.slot; if (p.equipment[s]) { stashAddItem(p, p.equipment[s]); p.equipment[s] = null; } reload();
     }));
     this.root.querySelectorAll('.potoff').forEach(b => b.addEventListener('click', () => {
-      const i = +b.dataset.i; if (p.potions[i]) { p.stash.push(p.potions[i]); p.potions[i] = null; } reload();
+      const i = +b.dataset.i; if (p.potions[i]) { stashAddItem(p, p.potions[i]); p.potions[i] = null; } reload();
     }));
     this.root.querySelectorAll('.topotion').forEach(b => b.addEventListener('click', () => {
-      const it = p.stash.find(x => x.uid === +b.dataset.uid);
+      const it = stashItems(p).find(x => x.uid === +b.dataset.uid);
       const slot = p.potions.findIndex(x => !x);
-      if (it && slot >= 0) { p.potions[slot] = it; p.stash = p.stash.filter(x => x.uid !== it.uid); }
+      if (it && slot >= 0) { p.potions[slot] = it; stashRemoveItem(p, it); }
       reload();
     }));
     // 売却
     this.root.querySelectorAll('.sell').forEach(b => b.addEventListener('click', () => {
-      const it = p.stash.find(x => x.uid === +b.dataset.uid);
-      if (it) { p.gold += Math.round(it.value * 0.6); p.stash = p.stash.filter(x => x.uid !== it.uid); }
+      const it = stashItems(p).find(x => x.uid === +b.dataset.uid);
+      if (it) { p.gold += Math.round(it.value * 0.6); stashRemoveItem(p, it); }
       reload();
     }));
     // 購入
     this.root.querySelectorAll('.buy').forEach(b => b.addEventListener('click', () => {
       const it = this.shopStock.find(x => x.uid === +b.dataset.uid);
-      if (it && p.gold >= this.buyPrice(it)) { p.gold -= this.buyPrice(it); p.stash.push(it); this.shopStock = this.shopStock.filter(x => x.uid !== it.uid); reload(); }
+      if (it && p.gold >= this.buyPrice(it)) { p.gold -= this.buyPrice(it); stashAddItem(p, it); this.shopStock = this.shopStock.filter(x => x.uid !== it.uid); reload(); }
       else this.toast('ゴールドが足りない');
     }));
     this.root.querySelectorAll('.refresh').forEach(b => b.addEventListener('click', () => { this.refreshShop(); reload(); }));
+    // 倉庫グリッド（ドラッグ整理・選択・操作）
+    const sg = this.root.querySelector('.stash-grid');
+    if (sg) this.attachGridDrag(sg, p.stash, { move: (e, x, y) => stashMove(p, e, x, y), select: (e) => { this.stashSel = e; reload(); }, refresh: reload });
+    const ssel = (this.stashSel && p.stash.items.includes(this.stashSel)) ? this.stashSel : null;
+    const SA = (cls, fn) => { const el = this.root.querySelector(cls); if (el) el.addEventListener('click', () => { fn(); reload(); }); };
+    SA('.srot', () => { if (ssel) stashRotate(p, ssel); });
+    SA('.sequip', () => { if (ssel) { const it = ssel.item, slot = it.slot; stashRemoveItem(p, it); if (p.equipment[slot]) stashAddItem(p, p.equipment[slot]); p.equipment[slot] = it; this.stashSel = null; } });
+    SA('.stopot', () => { if (ssel) { const slot = p.potions.findIndex(x => !x); if (slot < 0) { this.toast('ポーション枠が満杯'); return; } p.potions[slot] = ssel.item; stashRemoveItem(p, ssel.item); this.stashSel = null; } });
+    SA('.ssell', () => { if (ssel) { p.gold += Math.round(ssel.item.value * 0.6); stashRemoveItem(p, ssel.item); this.stashSel = null; Audio2.play && Audio2.play('coin'); } });
     // スキル選択
     this.root.querySelectorAll('.skilltoggle').forEach(b => b.addEventListener('click', () => {
       const sid = b.dataset.sid;
@@ -399,7 +412,7 @@ const UI = {
     // 鍛冶：強化／エンチャント
     const findItem = (uid) => {
       for (const slot in p.equipment) if (p.equipment[slot] && p.equipment[slot].uid === uid) return p.equipment[slot];
-      return p.stash.find(x => x.uid === uid);
+      return stashItems(p).find(x => x.uid === uid);
     };
     this.root.querySelectorAll('.upg').forEach(b => b.addEventListener('click', () => {
       const it = findItem(+b.dataset.uid); if (!it) return;
@@ -433,12 +446,12 @@ const UI = {
 
   equipItem(uid) {
     const p = Game.profile;
-    const it = p.stash.find(x => x.uid === uid);
+    const it = stashItems(p).find(x => x.uid === uid);
     if (!it) return;
     const slot = it.slot;
-    if (p.equipment[slot]) p.stash.push(p.equipment[slot]);
+    stashRemoveItem(p, it);
+    if (p.equipment[slot]) stashAddItem(p, p.equipment[slot]);
     p.equipment[slot] = it;
-    p.stash = p.stash.filter(x => x.uid !== uid);
   },
 
   buyPrice(it) { return Math.round(it.value * 2.2); },
@@ -540,6 +553,46 @@ const UI = {
     }
   },
 
+  // グリッドのドラッグ移動（回転表示でも document.elementsFromPoint で正しく判定）
+  attachGridDrag(grid, bag, opts) {
+    if (!grid || !grid.querySelectorAll) return;
+    const items = Array.from(grid.querySelectorAll('.bag-item'));
+    const cellAt = (x, y) => {
+      const els = document.elementsFromPoint ? document.elementsFromPoint(x, y) : [document.elementFromPoint(x, y)];
+      for (const el of els) if (el && el.classList && el.classList.contains('bag-cell')) return el;
+      return null;
+    };
+    const clearHi = () => grid.querySelectorAll('.bag-cell').forEach(c => c.classList.remove('drop', 'bad'));
+    let drag = null;
+    const end = (refresh) => { if (drag && drag.el) drag.el.classList.remove('dragging'); items.forEach(it => it.style.pointerEvents = ''); clearHi(); drag = null; if (refresh) opts.refresh(); };
+    items.forEach(el => {
+      el.addEventListener('pointerdown', (ev) => {
+        ev.preventDefault();
+        const entry = bag.items[+el.dataset.k]; if (!entry) return;
+        drag = { entry, el, sx: ev.clientX, sy: ev.clientY, moved: false };
+        el.classList.add('dragging');
+        items.forEach(it => it.style.pointerEvents = 'none');
+        el.setPointerCapture && el.setPointerCapture(ev.pointerId);
+      });
+      el.addEventListener('pointermove', (ev) => {
+        if (!drag) return;
+        if (!drag.moved && Math.hypot(ev.clientX - drag.sx, ev.clientY - drag.sy) > 8) drag.moved = true;
+        if (!drag.moved) return;
+        clearHi();
+        const c = cellAt(ev.clientX, ev.clientY); if (!c) return;
+        const tx = +c.dataset.x, ty = +c.dataset.y, e = drag.entry;
+        const ok = bagFits(bag, tx, ty, e.w, e.h, e);
+        for (let dy = 0; dy < e.h; dy++) for (let dx = 0; dx < e.w; dx++) { const cc = grid.querySelector(`.bag-cell[data-x="${tx + dx}"][data-y="${ty + dy}"]`); if (cc) cc.classList.add(ok ? 'drop' : 'bad'); }
+      });
+      el.addEventListener('pointerup', (ev) => {
+        if (!drag) return;
+        if (drag.moved) { const c = cellAt(ev.clientX, ev.clientY); if (c) opts.move(drag.entry, +c.dataset.x, +c.dataset.y); end(true); }
+        else { const e = drag.entry; end(false); opts.select(e); }
+      });
+      el.addEventListener('pointercancel', () => { if (drag) end(true); });
+    });
+  },
+
   // -------- バッグ（マス制・多マス占有／ダンジョン中） --------
   showBag(game) {
     this.hud.style.display = 'none';
@@ -558,20 +611,12 @@ const UI = {
       ? src.map((s, i) => `<div class="loot-row">${this.rarityTag(s.item)}<span class="sz">${itemSize(s.item)[0]}×${itemSize(s.item)[1]}</span><button class="btn sm take" data-i="${i}">拾う</button></div>`).join('') + (src.length > 1 ? '<button class="btn sm takeall">入る分だけ拾う</button>' : '')
       : '<div class="muted">なし</div>';
 
-    const moving = this.bagMove || null; // 移動中のentry
-    // セル背景（空きマス＝移動先候補）
     let cells = '';
-    for (let y = 0; y < bag.h; y++) for (let x = 0; x < bag.w; x++) {
-      const drop = moving ? bagFits(bag, x, y, moving.w, moving.h, moving) : false;
-      cells += `<div class="bag-cell ${moving && drop ? 'drop' : ''}" data-x="${x}" data-y="${y}" style="grid-column:${x + 1};grid-row:${y + 1}"></div>`;
-    }
-    // アイテム（マスをまたいで配置）
+    for (let y = 0; y < bag.h; y++) for (let x = 0; x < bag.w; x++) cells += `<div class="bag-cell" data-x="${x}" data-y="${y}" style="grid-column:${x + 1};grid-row:${y + 1}"></div>`;
     let items = '';
     for (let k = 0; k < bag.items.length; k++) {
-      const e = bag.items[k];
-      const selc = (this.bagSel === e) ? 'sel' : '';
-      const movc = (moving === e) ? 'moving' : '';
-      items += `<div class="bag-item ${selc} ${movc}" data-k="${k}" style="grid-column:${e.x + 1}/span ${e.w};grid-row:${e.y + 1}/span ${e.h};--rc:${RARITY[e.item.rarity].color}">${ic(e.item)}</div>`;
+      const e = bag.items[k]; const selc = (this.bagSel === e) ? 'sel' : '';
+      items += `<div class="bag-item ${selc}" data-k="${k}" style="grid-column:${e.x + 1}/span ${e.w};grid-row:${e.y + 1}/span ${e.h};--rc:${RARITY[e.item.rarity].color}">${ic(e.item)}</div>`;
     }
 
     let actHtml = '';
@@ -580,13 +625,10 @@ const UI = {
       const it = sel.item;
       const eq = ['weapon', 'head', 'chest', 'hands', 'legs', 'ring', 'torch'].includes(it.slot);
       actHtml = `<div class="bag-actions">${this.rarityTag(it)}
-        <button class="btn sm bmove">${moving === sel ? '移動をやめる' : '移動'}</button>
         ${sel.w !== sel.h ? '<button class="btn sm brot">回転</button>' : ''}
         ${eq ? '<button class="btn sm bequip">装備</button>' : ''}
         ${it.slot === 'potion' ? '<button class="btn sm buse">使う</button><button class="btn sm bslot">薬枠へ</button>' : ''}
         <button class="btn sm danger bdrop">捨てる</button></div>`;
-    } else if (moving) {
-      actHtml = `<div class="bag-actions"><span class="muted">緑のマスをタップして置く</span><button class="btn sm bmove">やめる</button></div>`;
     }
 
     const eqHtml = ['weapon', 'head', 'chest', 'hands', 'legs', 'ring', 'torch'].map(s => {
@@ -599,7 +641,7 @@ const UI = {
       <div class="bag-cols">
         <div class="bag-pane"><h3>${srcTitle}</h3>${srcHtml}</div>
         <div class="bag-pane">
-          <h3>バッグ ${bag.w}×${bag.h}（タップで選択・移動）</h3>
+          <h3>バッグ</h3>
           <div class="bag-grid" style="grid-template-columns:repeat(${bag.w},1fr);grid-template-rows:repeat(${bag.h},1fr);aspect-ratio:${bag.w}/${bag.h}">${cells}${items}</div>
           ${actHtml}
         </div>
@@ -608,20 +650,16 @@ const UI = {
     </div>`);
 
     const refresh = () => this.showBag(game);
-    const bc = this.root.querySelector('.bagclose'); if (bc) bc.addEventListener('click', () => { this.bagSel = null; this.bagMove = null; Game.closeBag(); });
-    this.root.querySelectorAll('.take').forEach(b => b.addEventListener('click', () => { const s = this._bagSrc[+b.dataset.i]; if (s) Game.takeLoot(s.from === 'chest' ? game.bagChest : 'ground', s.item); this.bagSel = null; this.bagMove = null; refresh(); }));
-    const ta = this.root.querySelector('.takeall'); if (ta) ta.addEventListener('click', () => { for (const s of this._bagSrc.slice()) Game.takeLoot(s.from === 'chest' ? game.bagChest : 'ground', s.item); this.bagSel = null; this.bagMove = null; refresh(); });
-    // アイテムをタップ：移動中なら別アイテム選択に切替、通常は選択
-    this.root.querySelectorAll('.bag-item').forEach(b => b.addEventListener('click', () => { const e = bag.items[+b.dataset.k]; if (this.bagMove && this.bagMove !== e) { this.bagMove = null; } this.bagSel = e; refresh(); }));
-    // 空きマスをタップ：移動中なら設置
-    this.root.querySelectorAll('.bag-cell').forEach(b => b.addEventListener('click', () => { if (this.bagMove) { if (Game.bagMove(this.bagMove, +b.dataset.x, +b.dataset.y)) { this.bagSel = this.bagMove; this.bagMove = null; } } else { this.bagSel = null; } refresh(); }));
+    const bc = this.root.querySelector('.bagclose'); if (bc) bc.addEventListener('click', () => { this.bagSel = null; Game.closeBag(); });
+    this.root.querySelectorAll('.take').forEach(b => b.addEventListener('click', () => { const s = this._bagSrc[+b.dataset.i]; if (s) Game.takeLoot(s.from === 'chest' ? game.bagChest : 'ground', s.item); this.bagSel = null; refresh(); }));
+    const ta = this.root.querySelector('.takeall'); if (ta) ta.addEventListener('click', () => { for (const s of this._bagSrc.slice()) Game.takeLoot(s.from === 'chest' ? game.bagChest : 'ground', s.item); this.bagSel = null; refresh(); });
+    this.attachGridDrag(this.root.querySelector('.bag-grid'), bag, { move: (e, x, y) => Game.bagMove(e, x, y), select: (e) => { this.bagSel = e; refresh(); }, refresh });
     const A = (cls, fn) => { const el = this.root.querySelector(cls); if (el) el.addEventListener('click', () => { fn(); refresh(); }); };
-    A('.bmove', () => { this.bagMove = (this.bagMove === sel) ? null : sel; });
     A('.brot', () => { Game.bagRotate(sel); });
-    A('.bequip', () => { Game.bagEquip(sel); this.bagSel = null; this.bagMove = null; });
+    A('.bequip', () => { Game.bagEquip(sel); this.bagSel = null; });
     A('.buse', () => { Game.bagUse(sel); this.bagSel = null; });
     A('.bslot', () => { Game.bagToPotionSlot(sel); this.bagSel = null; });
-    A('.bdrop', () => { Game.bagDrop(sel); this.bagSel = null; this.bagMove = null; });
+    A('.bdrop', () => { Game.bagDrop(sel); this.bagSel = null; });
     this.root.querySelectorAll('.unequip').forEach(b => b.addEventListener('click', () => { Game.bagUnequip(b.closest('.eqrow').dataset.slot); refresh(); }));
   },
 

@@ -26,6 +26,8 @@ const CONFIG = {
   POTION_SLOTS: 2,
   // バッグ（マス制インベントリ）
   BAG_W: 6, BAG_H: 4,
+  // 倉庫（タウンのグリッド）
+  STASH_W: 10, STASH_H: 8,
 
   // バランス
   DEFENSE_K: 60,       // ダメージ軽減の係数
