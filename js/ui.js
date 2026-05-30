@@ -229,7 +229,7 @@ const UI = {
     const cards = pool.map(sid => {
       const s = SKILLS[sid]; const on = p.loadout.includes(sid);
       return `<div class="skill-card ${on ? 'on' : ''}">
-        <div class="sc-top"><span class="sc-ic">${s.icon}</span><b>${s.name}</b></div>
+        <div class="sc-top"><span class="sc-ic">${(typeof Sprites !== 'undefined' && Sprites.skillURL(sid)) ? `<img class="sk-i" src="${Sprites.skillURL(sid)}">` : s.icon}</span><b>${s.name}</b></div>
         <div class="sc-meta">${s.mp} MP ・ CD ${s.cd}s ・ ${s.scaling ? STAT_NAMES[s.scaling] + '依存' : '補助'}</div>
         <div class="sc-desc">${s.desc}</div>
         <button class="btn sm skilltoggle ${on ? '' : ''}" data-sid="${sid}" ${!on && p.loadout.length >= 2 ? 'disabled' : ''}>${on ? '装備中（外す）' : '装備する'}</button>
@@ -464,8 +464,9 @@ const UI = {
       const s = SKILLS[sid];
       const cd = p.skillCd[i];
       const noMp = p.mp < s.mp;
+      const su = (typeof Sprites !== 'undefined') ? Sprites.skillURL(sid) : '';
       html += `<button class="skbtn ${game.selectedSkill === i ? 'sel' : ''} ${cd > 0 || noMp ? 'dis' : ''}" data-sk="${i}">
-        <div class="skic">${s.icon}</div>
+        <div class="skic">${su ? `<img class="sk-i" src="${su}">` : s.icon}</div>
         <div class="sklbl">${s.name}</div>
         <div class="skmp">${s.mp}MP</div>
         ${cd > 0 ? `<div class="skcd">${cd.toFixed(1)}</div>` : ''}
@@ -495,15 +496,16 @@ const UI = {
     const info = document.getElementById('runinfo');
     if (info) {
       const cu = (typeof Sprites !== 'undefined') ? Sprites.coinURL() : '';
-      const html = `${realmName(game.floor)}　撃破 ${game.run.kills}　戦利品 ${game.run.loot.length}　${cu ? `<img class="coin-i" src="${cu}">` : '金'}${game.run.gold}`;
+      const html = `${realmName(game.floor)}　撃破 ${game.run.kills}　戦利品 ${game.run.bag.filter(Boolean).length}/${game.run.bag.length}　${cu ? `<img class="coin-i" src="${cu}">` : '金'}${game.run.gold}`;
       if (this._lastRun !== html) { info.innerHTML = html; this._lastRun = html; }
     }
-    const db = document.getElementById('dodgebtn');
-    if (db) db.classList.toggle('cool', p.dodgeCd > 0);
+    const bb = document.getElementById('bagbtn');
+    if (bb && game.run) { const ct = bb.querySelector('.bag-ct'); if (ct) ct.textContent = game.run.bag.filter(Boolean).length + '/' + game.run.bag.length; }
     const ib = document.getElementById('interactbtn');
     if (ib) {
       const channeling = game.channel && game.channel.kind;
       if (game.nearStairs) { ib.style.display = 'block'; ib.textContent = '降りる'; ib.classList.remove('go'); }
+      else if (game.nearOpenChest) { ib.style.display = 'block'; ib.textContent = '宝箱を見る'; ib.classList.remove('go'); }
       else if (game.nearAltar) { ib.style.display = 'block'; ib.textContent = (game.nearAltar.type === 'sacrifice' ? '捧げる' : '祈る'); ib.classList.remove('go'); }
       else if (game.channelTarget) { ib.style.display = 'block'; ib.textContent = channeling ? '開錠中…' : (game.channelTarget.kind === 'chest' ? '宝箱を開ける' : '扉を開ける'); ib.classList.toggle('go', !!channeling); }
       else ib.style.display = 'none';
@@ -536,6 +538,72 @@ const UI = {
       const nb = bar.querySelector('.skbtn[data-sk="-1"]');
       if (nb) nb.classList.toggle('sel', game.selectedSkill === -1);
     }
+  },
+
+  // -------- バッグ（マス制インベントリ・ダンジョン中） --------
+  showBag(game) {
+    this.hud.style.display = 'none';
+    const p = Game.profile;
+    const bag = game.run.bag;
+    const free = bag.filter(x => !x).length;
+    const icon = (it) => { const u = Sprites.iconURL(it); return u ? `<img class="bag-ic" src="${u}" alt="">` : ''; };
+
+    // 取得元：宝箱の中身 or 足元の戦利品
+    const chest = game.bagChest;
+    let srcTitle, src;
+    if (chest && chest.contents && chest.contents.length) { srcTitle = '宝箱の中身'; src = chest.contents.map(it => ({ from: 'chest', item: it })); }
+    else { srcTitle = '足元の戦利品'; src = game.groundItems.filter(g => dist(game.player.x, game.player.y, g.x, g.y) < 110).map(g => ({ from: 'ground', item: g.item })); }
+    this._bagSrc = src;
+
+    const srcHtml = src.length
+      ? src.map((s, i) => `<div class="loot-row">${this.rarityTag(s.item)}<button class="btn sm take" data-i="${i}">拾う</button></div>`).join('') + (src.length > 1 ? '<button class="btn sm takeall">空きの分だけ全部拾う</button>' : '')
+      : '<div class="muted">なし</div>';
+
+    const gridHtml = bag.map((it, i) => `<div class="bag-cell ${it ? 'has' : ''} ${this.bagSel === i ? 'sel' : ''}" data-i="${i}" ${it ? `style="--rc:${RARITY[it.rarity].color}"` : ''}>${it ? icon(it) : ''}</div>`).join('');
+
+    let actHtml = '';
+    const sel = (this.bagSel != null) ? bag[this.bagSel] : null;
+    if (sel) {
+      const eq = ['weapon', 'head', 'chest', 'hands', 'legs', 'ring', 'torch'].includes(sel.slot);
+      actHtml = `<div class="bag-actions">${this.rarityTag(sel)}
+        ${eq ? '<button class="btn sm bequip">装備する</button>' : ''}
+        ${sel.slot === 'potion' ? '<button class="btn sm buse">使う</button><button class="btn sm bslot">薬枠へ</button>' : ''}
+        <button class="btn sm danger bdrop">捨てる</button></div>`;
+    }
+
+    const eqHtml = ['weapon', 'head', 'chest', 'hands', 'legs', 'ring', 'torch'].map(s => {
+      const it = p.equipment[s];
+      return `<div class="eqrow ${it ? '' : 'empty'}" data-slot="${s}"><span class="eqlbl">${SLOT_NAMES[s]}</span>${it ? this.rarityTag(it) : '<span class="muted">—</span>'}${it ? '<button class="btn sm unequip">外す</button>' : ''}</div>`;
+    }).join('');
+
+    this.panel(`<div class="bag-screen">
+      <div class="bag-top"><b>持ち物</b><span class="muted">空き ${free}/${bag.length}　${chest ? '（宝箱を開封中）' : ''}</span><button class="btn sm bagclose">閉じる</button></div>
+      <div class="bag-cols">
+        <div class="bag-pane">
+          <h3>${srcTitle}</h3>${srcHtml}
+        </div>
+        <div class="bag-pane">
+          <h3>バッグ（タップで選択）</h3>
+          <div class="bag-grid" style="grid-template-columns:repeat(${CONFIG.BAG_W},1fr)">${gridHtml}</div>
+          ${actHtml}
+        </div>
+        <div class="bag-pane">
+          <h3>装備</h3>${eqHtml}
+        </div>
+      </div>
+    </div>`);
+
+    const refresh = () => this.showBag(game);
+    const bc = this.root.querySelector('.bagclose'); if (bc) bc.addEventListener('click', () => { this.bagSel = null; Game.closeBag(); });
+    this.root.querySelectorAll('.take').forEach(b => b.addEventListener('click', () => { const s = this._bagSrc[+b.dataset.i]; if (s) Game.takeLoot(s.from === 'chest' ? game.bagChest : 'ground', s.item); refresh(); }));
+    const ta = this.root.querySelector('.takeall'); if (ta) ta.addEventListener('click', () => { for (const s of this._bagSrc.slice()) { if (Game.bagFreeIndex() < 0) break; Game.takeLoot(s.from === 'chest' ? game.bagChest : 'ground', s.item); } refresh(); });
+    this.root.querySelectorAll('.bag-cell').forEach(b => b.addEventListener('click', () => { const i = +b.dataset.i; this.bagSel = (bag[i] ? i : null); refresh(); }));
+    const A = (cls, fn) => { const el = this.root.querySelector(cls); if (el) el.addEventListener('click', () => { fn(); refresh(); }); };
+    A('.bequip', () => { Game.bagEquip(this.bagSel); this.bagSel = null; });
+    A('.buse', () => { Game.bagUse(this.bagSel); this.bagSel = null; });
+    A('.bslot', () => { Game.bagToPotionSlot(this.bagSel); this.bagSel = null; });
+    A('.bdrop', () => { Game.bagDrop(this.bagSel); this.bagSel = null; });
+    this.root.querySelectorAll('.unequip').forEach(b => b.addEventListener('click', () => { Game.bagUnequip(b.closest('.eqrow').dataset.slot); refresh(); }));
   },
 
   showExtract(prog, bonus) {
@@ -581,6 +649,6 @@ const UI = {
       ${lostHtml}
       <button class="btn big totown">伽藍へ還る</button>
     </div>`);
-    this.root.querySelector('.totown').addEventListener('click', () => Game.goTown());
+    const tt = this.root.querySelector('.totown'); if (tt) tt.addEventListener('click', () => Game.goTown());
   },
 };

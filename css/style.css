@@ -259,6 +259,27 @@ button { font-family: inherit; cursor: pointer; color: var(--ink); }
 .res-item { display: inline-block; margin: 4px; padding: 7px 11px; background: rgba(20,15,8,.7); border: 1px solid var(--line); border-radius: 3px; }
 .card.lost { border-color: #5a241e; } .card.lost h3 { color: var(--hp); }
 
+/* ===== バッグ（マス制インベントリ） ===== */
+.bag-screen { width: 100%; max-width: 980px; max-height: 96vh; margin: auto; display: flex; flex-direction: column;
+  background: linear-gradient(180deg, var(--panel2), var(--panel)); border: 1px solid var(--line2); border-radius: 5px; overflow: hidden; box-shadow: var(--shadow); }
+.bag-top { display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: linear-gradient(180deg, #1a1726, #110f1a); border-bottom: 1px solid var(--line2); }
+.bag-top b { font-family: var(--f-head); font-size: 16px; color: var(--gold-bright); }
+.bag-top .bagclose { margin-left: auto; }
+.bag-cols { display: grid; grid-template-columns: 1fr 1.2fr 1fr; gap: 12px; padding: 14px; overflow: auto; }
+@media (max-width: 720px) { .bag-cols { grid-template-columns: 1fr; } }
+.bag-pane { background: rgba(12,9,5,.4); border: 1px solid var(--line); border-radius: 4px; padding: 12px; }
+.bag-pane h3 { font-family: var(--f-head); font-size: 12px; letter-spacing: 1px; color: var(--gold-bright); margin-bottom: 10px; text-transform: uppercase; }
+.loot-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid rgba(90,74,40,.18); flex-wrap: wrap; }
+.bag-grid { display: grid; gap: 4px; }
+.bag-cell { aspect-ratio: 1; background: rgba(8,8,14,.55); border: 1px solid var(--line); border-radius: 4px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.bag-cell.has { border-color: color-mix(in srgb, var(--rc, #c7a24c) 45%, #2a2433); background: radial-gradient(circle at 50% 45%, color-mix(in srgb, var(--rc, #c7a24c) 18%, transparent), rgba(8,8,14,.5) 72%); }
+.bag-cell.sel { border-color: var(--gold-bright); box-shadow: 0 0 10px rgba(236,205,126,.5); }
+.bag-ic { width: 78%; height: 78%; image-rendering: pixelated; object-fit: contain; }
+.bag-actions { margin-top: 12px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding-top: 10px; border-top: 1px solid var(--line); }
+.eqrow { display: flex; align-items: center; gap: 8px; padding: 7px 0; border-bottom: 1px solid rgba(90,74,40,.18); flex-wrap: wrap; }
+.eqrow .eqlbl { width: 48px; font-size: 11px; color: var(--gold); font-family: var(--f-head); flex-shrink: 0; }
+.eqrow .unequip { margin-left: auto; }
+
 /* ============================================================
    HUD
    ============================================================ */
@@ -266,7 +287,15 @@ button { font-family: inherit; cursor: pointer; color: var(--ink); }
 #hud button, #skillbar button { pointer-events: auto; }
 #dmgflash { position: absolute; inset: 0; background: radial-gradient(ellipse at center, transparent 38%, rgba(170,20,16,.6)); opacity: 0; transition: opacity .12s; pointer-events: none; }
 
-.hud-vitals { position: absolute; top: max(10px, env(safe-area-inset-top)); left: max(12px, env(safe-area-inset-left)); width: min(300px, 44vw); }
+.hud-vitals { position: absolute; top: max(10px, env(safe-area-inset-top)); left: max(64px, calc(env(safe-area-inset-left) + 58px)); width: min(280px, 42vw); }
+/* 左上：バッグ */
+.bagbtn { position: absolute; top: max(10px, env(safe-area-inset-top)); left: max(10px, env(safe-area-inset-left));
+  width: 50px; height: 50px; border-radius: 8px; background: linear-gradient(180deg, #2a2114, #160f08); border: 1px solid var(--line2);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; pointer-events: auto;
+  box-shadow: inset 0 1px 0 rgba(255,220,150,.12), 0 2px 0 #000; }
+.bagbtn .bag-ic { font-family: var(--f-head); font-size: 18px; font-weight: 700; color: var(--gold-bright); line-height: 1; }
+.bagbtn .bag-ct { font-size: 9px; color: var(--ink-dim); font-family: var(--f-head); }
+.bagbtn:active { transform: scale(.94); }
 .vital { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
 .vlabel { font-family: var(--f-head); font-size: 11px; font-weight: 700; width: 22px; letter-spacing: .5px; }
 .hp .vlabel { color: #e0786a; } .mp .vlabel { color: #6fb0e6; }
@@ -280,7 +309,6 @@ button { font-family: inherit; cursor: pointer; color: var(--ink); }
 .runinfo { font-size: 11px; color: var(--gold-bright); margin-top: 5px; text-shadow: 0 1px 3px #000; font-family: var(--f-head); letter-spacing: .3px; white-space: nowrap; }
 
 #abandon { position: absolute; top: max(10px, env(safe-area-inset-top)); right: max(12px, env(safe-area-inset-right)); }
-#mute { position: absolute; top: max(10px, env(safe-area-inset-top)); right: max(98px, calc(env(safe-area-inset-right) + 86px)); }
 .hud-btn { font-family: var(--f-head); background: rgba(18,13,7,.82); border: 1px solid var(--line2); border-radius: 3px; padding: 8px 12px; font-size: 11px; font-weight: 600; letter-spacing: .5px; color: var(--gold-bright); box-shadow: inset 0 1px 0 rgba(255,220,150,.1); }
 
 #zoneinfo { position: absolute; top: max(10px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%);
@@ -295,15 +323,18 @@ button { font-family: inherit; cursor: pointer; color: var(--ink); }
 .exbar { width: 230px; height: 13px; background: #0a0604; border: 1px solid #000; border-radius: 3px; overflow: hidden; box-shadow: 0 0 0 1px var(--line2); }
 .exbar > div { height: 100%; background: linear-gradient(90deg, #2c63a8, #aee7ff); }
 
-#skillbar { position: absolute; left: 50%; transform: translateX(-50%); bottom: max(14px, env(safe-area-inset-bottom)); display: flex; flex-direction: row; align-items: center; gap: clamp(8px, 2vmin, 16px); }
-.skillrow, .potrow { display: flex; gap: clamp(5px, 1.2vmin, 8px); }
+/* スキル＆ポーションは右スティック付近（右端の縦列） */
+#skillbar { position: absolute; right: max(6px, env(safe-area-inset-right)); top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; align-items: flex-end; gap: clamp(6px, 1.4vmin, 10px); }
+.skillrow, .potrow { display: flex; flex-direction: column; gap: clamp(5px, 1.2vmin, 8px); }
 .skbtn { position: relative; width: clamp(46px, 9vmin, 62px); height: clamp(46px, 9vmin, 62px); border-radius: 6px;
   background: linear-gradient(180deg, #221a0e, #120c06); border: 2px solid var(--line2);
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
   box-shadow: inset 0 1px 0 rgba(255,220,150,.1), inset 0 0 14px rgba(0,0,0,.5); }
 .skbtn.sel { border-color: var(--gold-bright); box-shadow: 0 0 16px rgba(236,200,121,.55), inset 0 0 16px rgba(120,80,20,.3); background: linear-gradient(180deg, #3a2c14, #1e150a); }
 .skbtn.dis { opacity: .42; filter: grayscale(.4); }
-.skic { font-size: clamp(17px, 3.4vmin, 22px); line-height: 1; } .sklbl { font-size: clamp(7px, 1.4vmin, 8.5px); color: var(--ink-dim); font-family: var(--f-flavor); } .skmp { font-size: clamp(6.5px, 1.3vmin, 8px); color: var(--arcane); font-family: var(--f-head); }
+.skic { font-size: clamp(17px, 3.4vmin, 22px); line-height: 1; display: flex; align-items: center; justify-content: center; }
+.sk-i { width: clamp(22px, 4.4vmin, 30px); height: clamp(22px, 4.4vmin, 30px); image-rendering: pixelated; object-fit: contain; }
+.sc-ic .sk-i { width: 26px; height: 26px; } .sklbl { font-size: clamp(7px, 1.4vmin, 8.5px); color: var(--ink-dim); font-family: var(--f-flavor); } .skmp { font-size: clamp(6.5px, 1.3vmin, 8px); color: var(--arcane); font-family: var(--f-head); }
 .skcd { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: clamp(15px, 3vmin, 20px); font-weight: 800; font-family: var(--f-head); background: rgba(0,0,0,.6); border-radius: 4px; color: var(--gold-bright); }
 .potbtn { width: clamp(38px, 7.4vmin, 50px); height: clamp(38px, 7.4vmin, 50px); border-radius: 6px; background: linear-gradient(180deg, #221a0e, #120c06); border: 2px solid var(--line2); display: flex; flex-direction: column; align-items: center; justify-content: center; box-shadow: inset 0 0 12px rgba(0,0,0,.5); }
 .potbtn.empty { opacity: .38; } .potic { font-size: clamp(13px, 2.6vmin, 16px); font-family: var(--f-head); } .potlbl { font-size: clamp(7px, 1.3vmin, 8px); color: var(--muted); }

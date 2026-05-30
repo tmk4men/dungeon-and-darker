@@ -110,6 +110,23 @@ const Sprites = {
     try { if (cv.toDataURL) u = cv.toDataURL(); } catch (e) { u = ''; }
     this._coinURL = u; return u;
   },
+  makeSkillIcon(key) {
+    const ck = 'sk|' + key; if (this.cache[ck]) return this.cache[ck];
+    const rows = SKILL_ICONS[key] || SKILL_ICONS.sk_bolt;
+    const w = Math.max(...rows.map(r => r.length)), h = rows.length, S = 16;
+    const ox = Math.floor((S - w) / 2), oy = Math.floor((S - h) / 2);
+    const cv = document.createElement('canvas'); cv.width = S; cv.height = S; const c = cv.getContext('2d');
+    for (let y = 0; y < h; y++) { const row = rows[y]; for (let x = 0; x < row.length; x++) { const col = ICON_PAL[row[x]]; if (col) { c.fillStyle = col; c.fillRect(x + ox, y + oy, 1, 1); } } }
+    cv._w = S; cv._h = S; this.cache[ck] = cv; return cv;
+  },
+  skillURL(sid) {
+    const key = skillIconKey(sid), ck = 'skurl|' + key;
+    this._sku = this._sku || {};
+    if (this._sku[ck] !== undefined) return this._sku[ck];
+    const cv = this.makeSkillIcon(key); let u = '';
+    try { if (cv.toDataURL) u = cv.toDataURL(); } catch (e) { u = ''; }
+    this._sku[ck] = u; return u;
+  },
   iconURL(item) {
     const key = iconKey(item), ck = 'url|' + key;
     this._urls = this._urls || {};
@@ -289,7 +306,38 @@ const ICON_PAL = {
   'g': '#caa24c', 'G': '#f2d98a',
   'r': '#b6322c', 'R': '#e8665a', 'b': '#3f7fc4', 'B': '#80b2e8',
   'p': '#8a4fc6', 'P': '#c79bf0', 'e': '#6fae8a', 's': '#cfc6b4', 'k': '#d8b48a',
+  'c': '#9fe0ff', 'n': '#f2f4f8', 'y': '#ffe08a',
 };
+// スキルアイコン（属性/種別）
+const SKILL_ICONS = {
+  sk_slash: ['.............O..', '............OnO.', '..........OnnO..', '.........OnnO...', '.......OnnO.....', '......OnnO......', '....OnnO........', '...OnnO.........', '..OnO...........', '..OO............'],
+  sk_shield: ['...OOOOOO...', '..OiIIIIiO..', '.OiIIIIIIiO.', '.OiIIIIIIiO.', '.OiIIIIIIiO.', '..OiIIIIiO..', '...OiIIiO...', '....OiiO....', '.....OO.....'],
+  sk_fire: ['......O.....', '.....OrO....', '....OrRrO...', '...OrRRRrO..', '..OrRyyRrO..', '..OrRyyRrO..', '..ORyyyyRO..', '...ORyyRO...', '....OOOO....'],
+  sk_ice: ['......c.....', '..c..cOc..c.', '...c.ccc.c..', '....ccccc...', '..ccccccccc.', '....ccccc...', '...c.ccc.c..', '..c..cOc..c.', '......c.....'],
+  sk_holy: ['......g.....', '..g..gGg..g.', '...g.GGG.g..', '....GGGGG...', '..gGGGGGGGg.', '....GGGGG...', '...g.GGG.g..', '..g..gGg..g.', '......g.....'],
+  sk_poison: ['......e.....', '.....eee....', '....eeeee...', '...eeeeeee..', '..eeeeeeeee.', '..eeOeeeOee.', '...eeeeeee..', '....eeeee...', '.....eOe....'],
+  sk_shadow: ['....OOOO....', '...OpPPpO...', '..OpPppPpO..', '.OpPppppPpO.', '.OpPppppPpO.', '..OpPppPpO..', '...OpPPpO...', '....OOOO....'],
+  sk_arrow: ['..........G.', '.........GGG', '........G.G.', '.......G....', 'GGGGGGG.....', '.......G....', '........G.G.', '.........GGG', '..........G.'],
+  sk_heal: ['.....OO.....', '....OeeO....', '....OeeO....', '.OOOOeeOOOO.', '.OeeeeeeeeO.', '.OOOOeeOOOO.', '....OeeO....', '....OeeO....', '.....OO.....'],
+  sk_buff: ['.....G.....', '....GGG....', '...GG.GG...', '..GG...GG..', '...........', '....GGG....', '...GG.GG...', '..GG...GG..'],
+  sk_dash: ['............', '..cc...cc...', '.cc...cc..c.', 'cc...cc..cc.', '.cc...cc..c.', '..cc...cc...', '............'],
+  sk_bolt: ['......OBO...', '.....OBBO...', '....OBBO....', '...OBBBBO...', '....OBBO....', '...OBBO.....', '..OBBO......', '..OBO.......'],
+};
+function skillIconKey(sid) {
+  const s = SKILLS[sid]; if (!s) return 'sk_bolt';
+  if (s.holy) return 'sk_holy';
+  if (s.kind === 'heal') return 'sk_heal';
+  if (s.kind === 'buff') return s.stat === 'defense' ? 'sk_shield' : 'sk_buff';
+  if (s.kind === 'dash') return 'sk_dash';
+  if (s.kind === 'melee') return 'sk_slash';
+  if (s.kind === 'nova') { if (s.slow) return 'sk_ice'; if (s.dot) return 'sk_poison'; return 'sk_fire'; }
+  if (s.dot) return 'sk_poison';
+  if (s.lifesteal) return 'sk_shadow';
+  if (s.explode) return 'sk_fire';
+  if (s.color && /#9|#a|#c7|#b0/.test(s.color)) return 'sk_shadow';
+  if (s.scaling === 'DEX') return 'sk_arrow';
+  return 'sk_bolt';
+}
 const ICONS = {
   blade: ['.......O........', '......OIO.......', '......OIO.......', '......OIO.......', '......OIO.......', '......OIO.......', '.....OOIOO......', '...OGGGGGGGO....', '......OwO.......', '......OwO.......', '......OWO.......', '.....OGGGO.....', '......OOO.......'],
   hammer: ['...OOOOOOO...', '..OiIIIIIIO..', '..OiIIIIIIO..', '..OiIIIIIIO..', '..OOOOwOOOO..', '.....OwO.....', '.....OwO.....', '.....OwO.....', '.....OwO.....', '.....OWO.....', '.....OOO.....'],

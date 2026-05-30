@@ -7,6 +7,21 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#0c0a08">
 <title>輪廻 -RINNE-</title>
+<meta name="description" content="六道・十界をさまよう、ドット絵のエクストラクション型ダンジョンRPG。死ねば全てを失い、また人間界へ還る。スマホ横持ちで遊べるブラウザゲーム。">
+<!-- OGP -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="輪廻 -RINNE-">
+<meta property="og:title" content="輪廻 -RINNE-">
+<meta property="og:description" content="六道・十界をさまよう、ドット絵のエクストラクション型ダンジョンRPG。死ねば全てを失い、また人間界へ還る。">
+<meta property="og:url" content="https://tmk4men.github.io/dungeon-and-darker/">
+<meta property="og:image" content="https://tmk4men.github.io/dungeon-and-darker/ogp.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:locale" content="ja_JP">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="輪廻 -RINNE-">
+<meta name="twitter:description" content="六道・十界をさまよう、ドット絵のエクストラクション型ダンジョンRPG。">
+<meta name="twitter:image" content="https://tmk4men.github.io/dungeon-and-darker/ogp.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=Yuji+Syuku&family=Shippori+Mincho+B1:wght@500;600;700;800&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
@@ -31,8 +46,9 @@
       <div id="zoneinfo" class="zoneinfo"></div>
       <!-- 上中央：業（カルマ） -->
       <div id="karmainfo" class="karmainfo"></div>
-      <!-- 右上：ミュート＆退却 -->
-      <button id="mute" class="hud-btn">音</button>
+      <!-- 左上：バッグ -->
+      <button id="bagbtn" class="bagbtn"><span class="bag-ic">袋</span><span class="bag-ct">0/20</span></button>
+      <!-- 右上：退却 -->
       <button id="abandon" class="hud-btn">≡ 退却</button>
       <!-- 中央：脱出ゲージ -->
       <div id="extract"></div>
@@ -81,11 +97,8 @@
     ib.addEventListener('pointerup', (e) => { e.preventDefault(); Game.onInteractUp(); });
     ib.addEventListener('pointercancel', () => Game.onInteractUp());
     ib.addEventListener('pointerleave', () => Game.onInteractUp());
-    // ミュート
-    document.getElementById('mute').addEventListener('click', (e) => {
-      const m = Audio2.toggleMute();
-      e.currentTarget.textContent = m ? '消' : '音';
-    });
+    // バッグ（持ち物）
+    document.getElementById('bagbtn').addEventListener('click', (e) => { e.stopPropagation(); Game.openBag(); });
     // オーディオはユーザー操作で解放（モバイル対策）
     const unlock = () => { Audio2.init(); Audio2.resume(); window.removeEventListener('pointerdown', unlock); window.removeEventListener('keydown', unlock); };
     window.addEventListener('pointerdown', unlock);

@@ -461,6 +461,19 @@ const Render = {
     ctx.restore();
   },
 
+  drawTorch(ctx, facing, r, bob) {
+    const a = facing - Math.PI * 0.55;
+    const tx = Math.cos(a) * (r + 1), ty = Math.sin(a) * (r + 1) + bob - 4;
+    const fl = 0.55 + Math.sin(performance.now() / 90) * 0.22;
+    ctx.save(); ctx.translate(tx, ty);
+    ctx.fillStyle = `rgba(255,170,70,${0.22 * fl})`;
+    ctx.beginPath(); ctx.arc(0, -3, 12, 0, TAU); ctx.fill();
+    ctx.fillStyle = '#6a4a2a'; ctx.fillRect(-1.5, 0, 3, 9);
+    ctx.fillStyle = '#ff8a3c'; ctx.beginPath(); ctx.ellipse(0, -3, 3, 5 * fl + 2, 0, 0, TAU); ctx.fill();
+    ctx.fillStyle = '#ffe49a'; ctx.beginPath(); ctx.ellipse(0, -3, 1.4, 3 * fl + 1, 0, 0, TAU); ctx.fill();
+    ctx.restore();
+  },
+
   facingMark(ctx, ang, r, col) {
     ctx.save(); ctx.translate(0, r * 0.1); ctx.rotate(ang);
     ctx.fillStyle = hexA(col, 0.9);
@@ -481,6 +494,8 @@ const Render = {
     ctx.save(); ctx.translate(an.lx, an.ly);
     const wi = p.derived.weaponItem;
     if (!wi) this.facingMark(ctx, p.facing, r, col);
+    // トーチを左手に（装備時）— 灯っている見た目
+    if (p.derived.hasTorch) this.drawTorch(ctx, p.facing, r, an.bob);
     this.blitSprite(ctx, Sprites.player(p.classId), r, an.bob);
     if (wi) this.drawHandWeapon(ctx, wi, p.facing, r, an.bob, p.attackT);
     ctx.restore();
@@ -723,6 +738,17 @@ const Render = {
 
     // プレイヤー視界ポリゴン（方向コーン＋トーチ）
     this.carveVisibility(lctx, game);
+
+    // 近くの閉扉をじんわり照らす（暗闇で扉を見つけられる）
+    const pdx = Math.floor(p.x / T), pdy = Math.floor(p.y / T), DR = 6;
+    for (let dy = -DR; dy <= DR; dy++) for (let dx = -DR; dx <= DR; dx++) {
+      const tx = pdx + dx, ty = pdy + dy;
+      if (dgn.get(tx, ty) === T_DOOR) {
+        const cx = (tx + 0.5) * T, cy = (ty + 0.5) * T, d = dist(p.x, p.y, cx, cy);
+        const k = clamp(1 - d / (DR * T), 0, 1);
+        if (k > 0) { const s = this.worldToScreen(cx, cy); this.carveRadial(lctx, s.x, s.y, T * 1.7, k * 0.92); }
+      }
+    }
 
     // 未踏破の部屋は完全に隠す
     lctx.globalCompositeOperation = 'source-over';

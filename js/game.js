@@ -96,7 +96,7 @@ const Game = {
   enterDungeon() {
     this.floor = 1;
     this.derived = computeDerived(this.profile);
-    this.run = { loot: [], kills: 0, gold: 0, startGold: this.profile.gold, karma: 0 };
+    this.run = { bag: new Array(CONFIG.BAG_W * CONFIG.BAG_H).fill(null), kills: 0, gold: 0, startGold: this.profile.gold, karma: 0 };
     this.selectedSkill = -1;
 
     // プレイヤー生成（持ち込み装備のスナップショット）
@@ -302,6 +302,7 @@ const Game = {
     if (k['0'] || k['`']) this.selectSkill(-1);
     if (k['q']) { this.usePotion(0); k['q'] = false; }
     if (k['e']) { this.usePotion(1); k['e'] = false; }
+    if (k['b']) { k['b'] = false; if (this.paused) this.closeBag(); else this.openBag(); }
     // 開ける/祈る/降りる：押した瞬間＋押している間
     if (k['f'] && !this._fDown) { this._fDown = true; this.onInteractDown(); }
     if (!k['f'] && this._fDown) { this._fDown = false; this.onInteractUp(); }
@@ -821,7 +822,12 @@ const Game = {
   updateChannel(dt) {
     const p = this.player, T = CONFIG.TILE;
     let target = null, best = 1e9;
-    // 宝箱
+    // 開封済みで中身が残る宝箱（タップで再表示）
+    this.nearOpenChest = null;
+    for (const c of this.chests) {
+      if (c.opened && c.contents && c.contents.length && dist(p.x, p.y, c.x, c.y) < c.r + CONFIG.PLAYER_R + 16) { this.nearOpenChest = c; break; }
+    }
+    // 宝箱（未開封）
     for (const c of this.chests) {
       if (c.opened) continue;
       const dd = dist(p.x, p.y, c.x, c.y);
@@ -862,35 +868,87 @@ const Game = {
 
   openChest(c) {
     c.opened = true;
-    this.toast('宝箱を開けた');
+    this.toast('宝箱を開けた — 中身をバッグへ');
     Audio2.play('chest');
     this.burst(c.x, c.y, '#ffd27a', 18);
-    for (let i = 0; i < c.loot; i++) {
-      this.groundItems.push({ x: c.x + rand(-18, 18), y: c.y + rand(-18, 18), item: randomLoot(this.floor, this.derived.attr.LUCK) });
-    }
+    c.contents = [];
+    for (let i = 0; i < c.loot; i++) c.contents.push(randomLoot(this.floor, this.derived.attr.LUCK));
     if (chance(0.5)) this.run.gold += randInt(8, 30);
+    // 開封したらバッグ（中身）を開く
+    this.openBag(c);
   },
 
-  updatePickups() {
+  updatePickups() { /* 自動拾得は廃止。バッグ画面で回収する */ },
+
+  // ---------- バッグ（マス制インベントリ） ----------
+  bagFreeIndex() { return this.run.bag.findIndex(x => !x); },
+  bagCount() { return this.run.bag.filter(Boolean).length; },
+  bagAdd(item) {
+    const i = this.bagFreeIndex();
+    if (i < 0) return false;
+    this.run.bag[i] = item;
+    if (item.rarity === 'legendary') this.unlockAch('legendary');
+    return true;
+  },
+  // 近くの宝箱の中身 or 地上戦利品をバッグへ
+  takeLoot(source, item) {
+    if (this.bagFreeIndex() < 0) { this.toast('バッグに空きがない'); Audio2.play('ui'); return false; }
+    this.bagAdd(item);
+    Audio2.play(RARITY_ORDER.indexOf(item.rarity) >= 3 ? 'coin' : 'ui');
+    if (source === 'ground') { const i = this.groundItems.findIndex(g => g.item === item); if (i >= 0) this.groundItems.splice(i, 1); }
+    else if (source && source.contents) { const i = source.contents.indexOf(item); if (i >= 0) source.contents.splice(i, 1); }
+    return true;
+  },
+  bagDrop(idx) {
+    const it = this.run.bag[idx]; if (!it) return;
+    this.run.bag[idx] = null;
+    this.groundItems.push({ x: this.player.x + rand(-16, 16), y: this.player.y + rand(-16, 16), item: it });
+    Audio2.play('ui');
+  },
+  bagUse(idx) {
+    const it = this.run.bag[idx]; if (!it || !it.potion) return;
     const p = this.player;
-    // 地上アイテム
-    for (let i = this.groundItems.length - 1; i >= 0; i--) {
-      const g = this.groundItems[i];
-      if (dist(p.x, p.y, g.x, g.y) < CONFIG.PLAYER_R + 14) {
-        // ポーションは空きスロットへ
-        let placed = false;
-        if (g.item.slot === 'potion') {
-          for (let s = 0; s < p.potions.length; s++) if (!p.potions[s]) { p.potions[s] = g.item; placed = true; UI.buildSkillBar(this); break; }
-        }
-        if (!placed) this.run.loot.push(g.item);
-        if (g.item.rarity === 'legendary') this.unlockAch('legendary');
-        const col = RARITY[g.item.rarity] ? RARITY[g.item.rarity].color : '#fff';
-        this.addFloat(g.x, g.y - 14, itemDisplayName(g.item), col, 13);
-        if (RARITY_ORDER.indexOf(g.item.rarity) >= 3) { this.spawnRing(g.x, g.y, 4, 32, col, 0.5, 3); this.burst(g.x, g.y, col, 8); }
-        Audio2.play(RARITY_ORDER.indexOf(g.item.rarity) >= 3 ? 'coin' : 'ui');
-        this.groundItems.splice(i, 1);
-      }
-    }
+    if (it.potion.hp) { p.hp = Math.min(p.derived.hpmax, p.hp + it.potion.hp); this.addFloat(p.x, p.y - 22, '+' + it.potion.hp, '#7dffa0', 16); }
+    if (it.potion.mp) { p.mp = Math.min(p.derived.mpmax, p.mp + it.potion.mp); this.addFloat(p.x, p.y - 22, '+' + it.potion.mp, '#7db8ff', 16); }
+    this.run.bag[idx] = null; Audio2.play('potion');
+  },
+  bagToPotionSlot(idx) {
+    const it = this.run.bag[idx]; if (!it || it.slot !== 'potion') return;
+    const p = this.player; const s = p.potions.findIndex(x => !x);
+    if (s < 0) { this.toast('ポーション枠が満杯'); return; }
+    p.potions[s] = it; this.run.bag[idx] = null; UI.buildSkillBar(this); Audio2.play('ui');
+  },
+  bagEquip(idx) {
+    const it = this.run.bag[idx];
+    if (!it || !['weapon', 'head', 'chest', 'hands', 'legs', 'ring', 'torch'].includes(it.slot)) return;
+    const prev = this.profile.equipment[it.slot];
+    this.profile.equipment[it.slot] = it;
+    this.run.bag[idx] = prev || null; // 入れ替え（元装備はバッグへ）
+    // 派生再計算（HP上限変化に追従）
+    this.derived = computeDerived(this.profile);
+    this.player.derived = this.derived;
+    this.player.hp = Math.min(this.player.hp, this.derived.hpmax);
+    Audio2.play('select');
+  },
+  bagUnequip(slot) {
+    const it = this.profile.equipment[slot]; if (!it) return;
+    if (this.bagFreeIndex() < 0) { this.toast('バッグに空きがない'); return; }
+    this.profile.equipment[slot] = null; this.bagAdd(it);
+    this.derived = computeDerived(this.profile); this.player.derived = this.derived;
+    Audio2.play('ui');
+  },
+
+  openBag(chest) {
+    if (this.state !== 'dungeon') return;
+    this.paused = true;
+    this.bagChest = chest || null;
+    UI.showBag(this);
+  },
+  closeBag() {
+    this.paused = false;
+    this.bagChest = null;
+    UI.showHUD();
+    UI.buildSkillBar(this);
   },
 
   updatePortal(dt) {
@@ -921,12 +979,13 @@ const Game = {
     if (this.stairs && dist(p.x, p.y, this.stairs.x, this.stairs.y) < this.stairs.r + CONFIG.PLAYER_R + 8) this.nearStairs = this.stairs;
   },
 
-  // インタラクトボタン：押下（階段=降りる／祭壇=作法／扉・宝箱=押している間で開ける）
+  // インタラクトボタン：押下（階段=降りる／祭壇=作法／開封済み宝箱=中身表示／扉・宝箱=ワンタップ開錠）
   onInteractDown() {
+    const p = this.player;
     if (this.nearStairs) { this.descend(); return; }
+    if (this.nearOpenChest) { this.openBag(this.nearOpenChest); return; }
     const a = this.nearAltar;
     if (!(a && !a.used)) { this.interactHeld = true; return; }
-    const p = this.player;
     if (a.type === 'sacrifice') {
       const cost = Math.floor(p.hp * 0.25);
       if (p.hp - cost < 1) { this.toast('HPが足りない（生贄に捧げられない）'); return; }
@@ -1063,7 +1122,7 @@ const Game = {
     saveProfile(this.profile);
     Audio2.stopAmbient();
     Audio2.play('death');
-    UI.showResult(false, { kills: this.run.kills, gold: 0, xp, lost, loot: this.run.loot });
+    UI.showResult(false, { kills: this.run.kills, gold: 0, xp, lost, loot: this.run.bag.filter(Boolean) });
   },
 
   extract(portal) {
@@ -1073,25 +1132,25 @@ const Game = {
     if (portal && portal.bonus) {
       this.run.gold = Math.round(this.run.gold * 1.6 + 40);
       const extra = randomLoot(this.floor + 1, this.derived.attr.LUCK + 8);
-      this.run.loot.push(extra);
+      this.bagAdd(extra) || this.profile.stash.push(extra);
       this.toast('報酬ポータルで脱出！ボーナス獲得');
     }
     // 取得品をストレージへ、ゴールド加算
-    for (const it of this.run.loot) this.profile.stash.push(it);
+    for (const it of this.run.bag) if (it) this.profile.stash.push(it);
     this.profile.gold += this.run.gold;
     // 道中で使用/取得したポーションの状態を反映
     this.profile.potions = this.player.potions.map(x => x || null);
-    const xp = Math.round(this.run.kills * 10 + this.floor * 25 + this.run.loot.length * 5);
+    const xp = Math.round(this.run.kills * 10 + this.floor * 25 + this.bagCount() * 5);
     const leveled = grantXP(this.profile, xp);
     // 実績・依頼
     this.unlockAch('first_extract');
     if (this.floor >= 3) this.unlockAch('deep');
     if (this.profile.gold >= 1000) this.unlockAch('rich');
     if (this.profile.level >= 10) this.unlockAch('lvl10');
-    if (this.run.loot.some(it => it.rarity === 'legendary')) this.unlockAch('legendary');
+    if (this.run.bag.some(it => it && it.rarity === 'legendary')) this.unlockAch('legendary');
     this.progressBounty('extract', 1);
     this.progressBounty('floor', this.floor, true);
-    if (this.run.loot.some(it => RARITY_ORDER.indexOf(it.rarity) >= 3)) this.progressBounty('rarity', 1);
+    if (this.run.bag.some(it => it && RARITY_ORDER.indexOf(it.rarity) >= 3)) this.progressBounty('rarity', 1);
     this.profile.runStats.extracts++;
     this.profile.runStats.runs++;
     this.profile.runStats.kills += this.run.kills;
@@ -1101,7 +1160,7 @@ const Game = {
     Audio2.stopAmbient();
     Audio2.play('extract');
     if (leveled) setTimeout(() => Audio2.play('levelup'), 500);
-    UI.showResult(true, { kills: this.run.kills, gold: this.run.gold, xp, leveled, loot: this.run.loot });
+    UI.showResult(true, { kills: this.run.kills, gold: this.run.gold, xp, leveled, loot: this.run.bag.filter(Boolean) });
   },
 
   abandon() {
