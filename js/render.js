@@ -129,9 +129,11 @@ const Render = {
     for (const e of game.enemies) if (!e.dead) ents.push(e);
     ents.push(game.player);
     if (dgn.rocks) for (const rk of dgn.rocks) ents.push({ rock: rk, y: rk.y });
+    if (game.thrownTorch) ents.push({ torch: game.thrownTorch, y: game.thrownTorch.y });
     ents.sort((a, b) => a.y - b.y);
     for (const e of ents) {
       if (e.rock) this.drawRock(ctx, e.rock, dgn.theme);
+      else if (e.torch) this.drawThrownTorch(ctx, e.torch, game);
       else if (e === game.player) this.drawPlayer(ctx, e);
       else this.drawEnemy(ctx, e, game);
     }
@@ -211,6 +213,32 @@ const Render = {
     ctx.beginPath(); ctx.arc(0, 0, 13, -Math.PI / 2, -Math.PI / 2 + TAU * clamp(ch.prog, 0, 1)); ctx.stroke();
     ctx.fillStyle = '#ffe6a8'; ctx.font = 'bold 10px "Shippori Mincho B1", serif'; ctx.textAlign = 'center';
     ctx.fillText(ch.label, 0, -20);
+    ctx.restore();
+  },
+
+  // 投げた松明（飛行中＝回転、着地後＝燃える）
+  drawThrownTorch(ctx, tt, game) {
+    const s = this.worldToScreen(tt.x, tt.y), t = game.time;
+    ctx.save();
+    ctx.translate(s.x, s.y);
+    if (!tt.flying) {
+      // 接地影
+      ctx.fillStyle = 'rgba(0,0,0,0.4)';
+      ctx.beginPath(); ctx.ellipse(0, 5, 9, 4, 0, 0, TAU); ctx.fill();
+    } else {
+      ctx.rotate(t * 18);
+    }
+    // 柄
+    ctx.fillStyle = '#5a3c22'; ctx.fillRect(-2, -2, 4, 12);
+    ctx.fillStyle = '#3a2614'; ctx.fillRect(-2, 6, 4, 4);
+    // 炎
+    const fl = 0.7 + Math.sin(t * 16 + tt.flick) * 0.3;
+    const grd = ctx.createRadialGradient(0, -8, 1, 0, -8, 9 * fl);
+    grd.addColorStop(0, 'rgba(255,240,180,0.95)');
+    grd.addColorStop(0.5, 'rgba(255,150,60,0.9)');
+    grd.addColorStop(1, 'rgba(200,60,20,0)');
+    ctx.fillStyle = grd;
+    ctx.beginPath(); ctx.ellipse(0, -8, 6 * fl, 10 * fl, 0, 0, TAU); ctx.fill();
     ctx.restore();
   },
 
@@ -534,8 +562,8 @@ const Render = {
     ctx.save(); ctx.translate(an.lx, an.ly);
     const wi = p.derived.weaponItem;
     if (!wi) this.facingMark(ctx, p.facing, r, col);
-    // トーチを左手に（装備時）— 灯っている見た目
-    if (p.derived.hasTorch) this.drawTorch(ctx, p.facing, r, an.bob);
+    // トーチを左手に（装備時）— 灯っている見た目。投げている間は手元から消える
+    if (p.derived.hasTorch && !(typeof Game !== 'undefined' && Game.torchThrown)) this.drawTorch(ctx, p.facing, r, an.bob);
     this.blitSprite(ctx, Sprites.player(p.classId), r, an.bob);
     if (wi) this.drawHandWeapon(ctx, wi, p.facing, r, an.bob, p.attackT);
     ctx.restore();
@@ -775,6 +803,13 @@ const Render = {
       this.carveRadial(lctx, s.x, s.y, l.radius * fl, 1);
     }
 
+    // 投げた松明：その場を照らす光源
+    if (game.thrownTorch) {
+      const tt = game.thrownTorch, s = this.worldToScreen(tt.x, tt.y);
+      const fl = 0.85 + Math.sin(game.time * 9 + tt.flick) * 0.12;
+      this.carveRadial(lctx, s.x, s.y, tt.radius * fl, 1);
+    }
+
     // プレイヤー視界ポリゴン（方向コーン＋トーチ）
     this.carveVisibility(lctx, game);
 
@@ -801,17 +836,29 @@ const Render = {
     // 合成
     this.ctx.drawImage(this.light, 0, 0);
 
-    // 松明の暖色光（プレイヤー中心）
+    // 松明の暖色光（プレイヤー中心。投げている間は手元が暗くなる）
+    const hasHandTorch = p.derived.hasTorch && !game.torchThrown;
     const ps = this.worldToScreen(p.x, p.y);
-    const warmR = (p.derived.hasTorch ? CONFIG.TORCH_VISION : CONFIG.BASE_VISION) * T * 0.75;
+    const warmR = (hasHandTorch ? CONFIG.TORCH_VISION : CONFIG.BASE_VISION) * T * 0.75;
     const fl = 0.10 + Math.sin(game.time * 9) * 0.015;
+    this.ctx.globalCompositeOperation = 'lighter';
     const wg = this.ctx.createRadialGradient(ps.x, ps.y, 0, ps.x, ps.y, warmR);
     wg.addColorStop(0, `rgba(255,176,92,${fl})`);
     wg.addColorStop(0.6, `rgba(255,150,70,${fl * 0.4})`);
     wg.addColorStop(1, 'rgba(255,140,60,0)');
-    this.ctx.globalCompositeOperation = 'lighter';
     this.ctx.fillStyle = wg;
     this.ctx.fillRect(0, 0, CONFIG.VIEW_W, CONFIG.VIEW_H);
+    // 投げた松明の暖色グロー
+    if (game.thrownTorch) {
+      const tt = game.thrownTorch, ts = this.worldToScreen(tt.x, tt.y);
+      const tr = tt.radius * 0.8, tfl = 0.14 + Math.sin(game.time * 9 + tt.flick) * 0.03;
+      const tg = this.ctx.createRadialGradient(ts.x, ts.y, 0, ts.x, ts.y, tr);
+      tg.addColorStop(0, `rgba(255,176,92,${tfl})`);
+      tg.addColorStop(0.55, `rgba(255,150,70,${tfl * 0.4})`);
+      tg.addColorStop(1, 'rgba(255,140,60,0)');
+      this.ctx.fillStyle = tg;
+      this.ctx.fillRect(0, 0, CONFIG.VIEW_W, CONFIG.VIEW_H);
+    }
     this.ctx.globalCompositeOperation = 'source-over';
   },
 
@@ -838,7 +885,8 @@ const Render = {
 
   carveVisibility(lctx, game) {
     const dgn = game.dgn, p = game.player, T = CONFIG.TILE;
-    const visPx = p.derived.vision * T;
+    const effVision = (p.derived.hasTorch && !game.torchThrown) ? CONFIG.TORCH_VISION : CONFIG.BASE_VISION;
+    const visPx = effVision * T;
     const backPx = CONFIG.BACK_GLOW * T;
     const coneHalf = (CONFIG.CONE_DEG * Math.PI / 180) / 2;
     const rays = 110;

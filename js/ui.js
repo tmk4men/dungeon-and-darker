@@ -525,8 +525,9 @@ const UI = {
       }
     });
     document.getElementById('skillbar').innerHTML = html;
-    document.querySelectorAll('#skillbar .skbtn').forEach(b => b.addEventListener('click', () => Game.selectSkill(+b.dataset.sk)));
-    document.querySelectorAll('#skillbar .potbtn').forEach(b => b.addEventListener('click', () => Game.usePotion(+b.dataset.pot)));
+    // pointerdown で即時反応（左スティックで移動中＝マルチタッチでも確実に効く）
+    document.querySelectorAll('#skillbar .skbtn').forEach(b => b.addEventListener('pointerdown', (e) => { e.preventDefault(); Game.selectSkill(+b.dataset.sk); }));
+    document.querySelectorAll('#skillbar .potbtn').forEach(b => b.addEventListener('pointerdown', (e) => { e.preventDefault(); Game.usePotion(+b.dataset.pot); }));
   },
 
   updateHUD(game) {
@@ -548,6 +549,13 @@ const UI = {
       const bi = bb.querySelector('.bag-ic');
       if (bi && typeof Sprites !== 'undefined' && Sprites.bagURL() && !this._bagIcon) { bi.innerHTML = `<img class="bag-ic-img" src="${Sprites.bagURL()}" alt="">`; this._bagIcon = true; }
       const ct = bb.querySelector('.bag-ct'); if (ct) ct.textContent = bagFreeCells(game.run.bag) + 'マス';
+    }
+    const tb = document.getElementById('torchbtn');
+    if (tb) {
+      const hasTorch = game.profile && game.profile.equipment && game.profile.equipment.torch;
+      tb.style.display = hasTorch ? 'flex' : 'none';
+      tb.classList.toggle('thrown', !!game.torchThrown);
+      const st = tb.querySelector('.torch-st'); if (st) st.textContent = game.torchThrown ? '投擲中' : '投げる';
     }
     const ib = document.getElementById('interactbtn');
     if (ib) {

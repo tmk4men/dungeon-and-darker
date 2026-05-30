@@ -140,6 +140,7 @@ const Game = {
     this.altars = this.dgn.altars.slice();
     this.stairs = this.dgn.stairs;
     this.nearAltar = null; this.nearStairs = null; this.channelTarget = null; this.interactHeld = false;
+    this.thrownTorch = null; this.torchThrown = false; // 階移動で松明は手に戻る
     this.player.x = this.dgn.startX; this.player.y = this.dgn.startY;
     this.player.dodgeT = 0; this.player.invuln = 0.6; // 到着直後の保護
     this.transitionT = 1.5; this.transitionName = realmName(this.floor);
@@ -264,6 +265,7 @@ const Game = {
     this.playerRoom = roomAt(this.dgn, p.x, p.y);
     if (this.playerRoom && !this.playerRoom.revealed) this.playerRoom.revealed = true;
     this.updatePickups();
+    if (this.thrownTorch) this.updateThrownTorch(dt);
     this.updatePortal(dt);
     this.updateAltars();
     this.updateTraps(dt);
@@ -881,6 +883,47 @@ const Game = {
   },
 
   updatePickups() { /* 自動拾得は廃止。バッグ画面で回収する */ },
+
+  // ---------- 松明（トーチ）を投げて足元以外を照らす ----------
+  throwTorch() {
+    if (this.state !== 'dungeon' || this.paused) return;
+    const p = this.player;
+    if (!this.profile.equipment.torch) { this.toast('松明を装備していない'); return; }
+    if (this.torchThrown) { this.toast('松明は投げている'); return; }
+    this.torchThrown = true;
+    const ang = p.facing;
+    this.thrownTorch = {
+      x: p.x, y: p.y, vx: Math.cos(ang) * 480, vy: Math.sin(ang) * 480,
+      flying: true, t: 0, pickCd: 0.7,
+      radius: CONFIG.TORCH_VISION * CONFIG.TILE * 0.95, flick: rand(0, TAU),
+    };
+    Audio2.play('swing');
+    UI.updateHUD(this);
+  },
+  updateThrownTorch(dt) {
+    const tt = this.thrownTorch, p = this.player;
+    if (tt.flying) {
+      tt.t += dt;
+      const nx = tt.x + tt.vx * dt, ny = tt.y + tt.vy * dt;
+      if (isSolidAt(this.dgn, nx, ny) || tt.t > 0.42) {
+        tt.flying = false; tt.vx = 0; tt.vy = 0;
+        this.burst(tt.x, tt.y, '#ffae5b', 12);
+        Audio2.play('step');
+        const rm = roomAt(this.dgn, tt.x, tt.y); if (rm) rm.revealed = true; // 投げた先を照らし出す（偵察）
+      } else { tt.x = nx; tt.y = ny; }
+      if (Math.random() < dt * 34) this.particles.push({ x: tt.x, y: tt.y, vx: rand(-12, 12), vy: rand(-34, -10), r: rand(1, 2.4), color: 'rgba(255,160,80,0.75)', life: 0.5, maxlife: 0.5 });
+    } else {
+      tt.pickCd = Math.max(0, tt.pickCd - dt);
+      if (Math.random() < dt * 20) this.particles.push({ x: tt.x + rand(-4, 4), y: tt.y - rand(0, 7), vx: rand(-7, 7), vy: rand(-28, -8), r: rand(1, 2.3), color: chance(0.5) ? 'rgba(255,176,92,0.75)' : 'rgba(255,120,50,0.6)', life: rand(0.4, 0.8), maxlife: 0.8 });
+      // 近づくと手に戻る
+      if (tt.pickCd <= 0 && !p.dead && dist(p.x, p.y, tt.x, tt.y) < CONFIG.PLAYER_R + 24) this.pickupTorch();
+    }
+  },
+  pickupTorch() {
+    this.torchThrown = false; this.thrownTorch = null;
+    Audio2.play('ui');
+    UI.updateHUD(this);
+  },
 
   // ---------- バッグ（マス制・多マス占有） ----------
   bagCount() { return this.run.bag.items.length; },
