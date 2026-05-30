@@ -99,7 +99,7 @@ button { font-family: inherit; cursor: pointer; color: var(--ink); }
 .subtitle::before, .subtitle::after { content: '◆'; color: var(--gold); margin: 0 12px; font-size: .7em; opacity: .7; vertical-align: middle; }
 
 /* class select */
-.class-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+.class-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .class-card { background: linear-gradient(180deg, var(--panel2), var(--panel));
   border: 1px solid var(--line2); border-top: 2px solid var(--ac); border-radius: 4px; padding: 13px; text-align: left;
   position: relative; transition: .18s; box-shadow: var(--shadow);
@@ -220,7 +220,7 @@ button { font-family: inherit; cursor: pointer; color: var(--ink); }
 .inv-row > div { min-width: 0; flex: 1; }
 
 /* skill select */
-.skill-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(222px, 1fr)); gap: 11px; }
+.skill-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 11px; }
 .skill-card { background: linear-gradient(180deg, rgba(40,31,18,.55), rgba(18,13,7,.55)); border: 1px solid var(--line); border-radius: 4px; padding: 13px; transition: .15s; position: relative; }
 .skill-card.on { border-color: var(--gold); box-shadow: 0 0 16px rgba(201,162,74,.28), inset 0 0 20px rgba(120,80,20,.18); }
 .sc-top { display: flex; align-items: center; gap: 9px; font-family: var(--f-flavor); font-size: 15px; font-weight: 700; color: var(--ink); }
@@ -265,8 +265,10 @@ button { font-family: inherit; cursor: pointer; color: var(--ink); }
 .bag-top { display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: linear-gradient(180deg, #1a1726, #110f1a); border-bottom: 1px solid var(--line2); }
 .bag-top b { font-family: var(--f-head); font-size: 16px; color: var(--gold-bright); }
 .bag-top .bagclose { margin-left: auto; }
-.bag-cols { display: grid; grid-template-columns: 1fr 1.2fr 1fr; gap: 12px; padding: 14px; overflow: auto; }
+.bag-cols { display: grid; grid-template-columns: 1fr 1.15fr; gap: 12px; padding: 14px; overflow: auto; align-items: start; }
 @media (max-width: 720px) { .bag-cols { grid-template-columns: 1fr; } }
+.eq-sub { margin-top: 14px !important; }
+.eqgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; }
 .bag-pane { background: rgba(12,9,5,.4); border: 1px solid var(--line); border-radius: 4px; padding: 12px; }
 .bag-pane h3 { font-family: var(--f-head); font-size: 12px; letter-spacing: 1px; color: var(--gold-bright); margin-bottom: 10px; text-transform: uppercase; }
 .loot-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid rgba(90,74,40,.18); flex-wrap: wrap; }
@@ -332,10 +334,11 @@ button { font-family: inherit; cursor: pointer; color: var(--ink); }
 .exbar { width: 230px; height: 13px; background: #0a0604; border: 1px solid #000; border-radius: 3px; overflow: hidden; box-shadow: 0 0 0 1px var(--line2); }
 .exbar > div { height: 100%; background: linear-gradient(90deg, #2c63a8, #aee7ff); }
 
-/* スキル＆ポーションは右スティック付近（右端の縦列） */
-#skillbar { position: absolute; right: max(6px, env(safe-area-inset-right)); top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; align-items: flex-end; gap: clamp(6px, 1.4vmin, 10px); }
-.skillrow, .potrow { display: flex; flex-direction: column; gap: clamp(5px, 1.2vmin, 8px); }
-.skbtn { position: relative; width: clamp(46px, 9vmin, 62px); height: clamp(46px, 9vmin, 62px); border-radius: 6px;
+/* スキル＆ポーションは右スティックの周囲に弧状配置 */
+#skillbar { position: absolute; right: 13%; bottom: 27%; width: 0; height: 0;
+  --skr: clamp(80px, 18vmin, 120px); pointer-events: none; }
+#skillbar .skbtn, #skillbar .potbtn { position: absolute; transform: translate(-50%, -50%); pointer-events: auto; }
+.skbtn { position: relative; width: clamp(44px, 8.6vmin, 58px); height: clamp(44px, 8.6vmin, 58px); border-radius: 6px;
   background: linear-gradient(180deg, #221a0e, #120c06); border: 2px solid var(--line2);
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
   box-shadow: inset 0 1px 0 rgba(255,220,150,.1), inset 0 0 14px rgba(0,0,0,.5); }
@@ -371,6 +374,22 @@ button { font-family: inherit; cursor: pointer; color: var(--ink); }
 .modal-btns .btn { min-width: 116px; }
 .modal-yes { border-color: var(--vermilion); color: #f0b6aa; }
 .modal-yes:hover { border-color: #e0584a; color: #ffe2da; box-shadow: 0 0 16px rgba(200,64,47,.4), 0 2px 0 #000; }
+
+/* ---------- スタート画面 ---------- */
+.start-screen { max-width: 760px; width: 100%; margin: auto; text-align: center; position: relative;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 84vh;
+  animation: riseIn .6s cubic-bezier(.2,.7,.3,1) both; }
+.start-wheel { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -54%); width: min(64vh, 360px); height: min(64vh, 360px); pointer-events: none; opacity: .42; z-index: 0; }
+.start-wheel span { position: absolute; inset: 0; border-radius: 50%; }
+.start-wheel span:nth-child(1) { border: 1px dashed rgba(200,64,47,.5); animation: spin 24s linear infinite; }
+.start-wheel span:nth-child(2) { inset: 14%; border: 1px solid rgba(199,162,76,.5); animation: spin 16s linear infinite reverse; }
+.start-wheel span:nth-child(3) { inset: 30%; border: 1px dashed rgba(124,110,166,.55); animation: spin 34s linear infinite; }
+.start-mark { position: relative; z-index: 1; font-family: var(--f-display); letter-spacing: 8px; font-size: 13px; color: var(--gold); opacity: .8; margin-bottom: 10px; }
+.start-title { position: relative; z-index: 1; font-size: clamp(58px, 14vw, 132px); }
+.start-screen .subtitle { position: relative; z-index: 1; }
+.start-screen .startbtn { position: relative; z-index: 1; width: auto; min-width: 240px; padding: 15px 40px; font-size: 15px; letter-spacing: 3px; margin-top: 6px;
+  border-color: var(--gold); color: var(--gold-bright); box-shadow: inset 0 1px 0 rgba(255,220,150,.18), 0 0 22px rgba(201,162,74,.3), 0 2px 0 #000; }
+.start-foot { position: relative; z-index: 1; margin-top: 22px; font-family: var(--f-flavor); font-size: 12px; color: var(--muted); letter-spacing: 1px; }
 
 /* 縦持ちは #app を90°回転して横画面化するため、回転案内は不要 */
 #rotate { display: none !important; }

@@ -25,9 +25,17 @@ const Game = {
     Input.init(document.getElementById('game'));
     UI.init();
     this.profile = loadProfile();
-    this.goTown();
+    this.state = 'start';
+    UI.showStart(!!this.profile);
     this.lastT = performance.now();
     requestAnimationFrame(t => this.loop(t));
+  },
+
+  // スタート画面から入る
+  startGame() {
+    Audio2.init(); Audio2.resume();
+    Audio2.play && Audio2.play('levelup');
+    this.goTown();
   },
 
   // 修行の道（職業）を選ぶ／変える
@@ -63,7 +71,7 @@ const Game = {
       // 破損/旧セーブの救済
       if (!CLASSES[this.profile.classId]) {
         this.profile.classId = REMOVED_CLASS_MAP[this.profile.classId] || 'fighter';
-        this.profile.loadout = [...CLASSES[this.profile.classId].skills];
+        this.profile.loadout = (CLASS_SKILL_POOL[this.profile.classId] || CLASSES[this.profile.classId].skills).slice(0, 3);
       }
       const cls = CLASSES[this.profile.classId];
       if (!this.profile.baseAttrs) this.profile.baseAttrs = { ...cls.base };
@@ -76,7 +84,7 @@ const Game = {
       if (!this.profile.achievements) this.profile.achievements = {};
       if (!this.profile.bounties) this.profile.bounties = [];
       if (!this.profile.runStats.elites) this.profile.runStats.elites = 0;
-      if (!this.profile.loadout) this.profile.loadout = [...CLASSES[this.profile.classId].skills];
+      if (!this.profile.loadout || !this.profile.loadout.length) this.profile.loadout = (CLASS_SKILL_POOL[this.profile.classId] || CLASSES[this.profile.classId].skills).slice(0, 3);
       if (this.profile.bounties.length < 3) {
         const need = 3 - this.profile.bounties.length;
         this.profile.bounties.push(...generateBounties().slice(0, need));
@@ -104,9 +112,9 @@ const Game = {
     this.player = {
       x: 0, y: 0, vx: 0, vy: 0, facing: -Math.PI / 2,
       hp: d.hpmax, mp: d.mpmax, derived: d, classId: this.profile.classId,
-      skillCd: [0, 0], attackCd: 0, potionCd: 0, invuln: 0, buffs: [], dead: false,
+      skillCd: [0, 0, 0], attackCd: 0, potionCd: 0, invuln: 0, buffs: [], dead: false,
       slowT: 0, slowMul: 1, zoneTick: 0, dodgeCd: 0, dodgeT: 0, dodgeDir: 0, dotT: 0, dotDmg: 0, dotAcc: 0,
-      skills: (this.profile.loadout && this.profile.loadout.length === 2) ? this.profile.loadout : CLASSES[this.profile.classId].skills,
+      skills: (this.profile.loadout && this.profile.loadout.length) ? this.profile.loadout.slice(0, 3) : CLASSES[this.profile.classId].skills.slice(0, 3),
       potions: this.profile.potions.map(p => p ? { ...p } : null),
     };
 
@@ -245,8 +253,7 @@ const Game = {
     p.invuln = Math.max(0, p.invuln - dt);
     p.dodgeCd = Math.max(0, p.dodgeCd - dt);
     p.attackT = Math.max(0, (p.attackT || 0) - dt);
-    p.skillCd[0] = Math.max(0, p.skillCd[0] - dt);
-    p.skillCd[1] = Math.max(0, p.skillCd[1] - dt);
+    for (let i = 0; i < p.skillCd.length; i++) p.skillCd[i] = Math.max(0, p.skillCd[i] - dt);
     p.mp = Math.min(d.mpmax, p.mp + d.mpregen * dt);
 
     // キーボード操作（スキル選択・ポーション・発射）
@@ -297,6 +304,7 @@ const Game = {
     const k = Input.keys;
     if (k['1']) this.selectSkill(0);
     if (k['2']) this.selectSkill(1);
+    if (k['3']) this.selectSkill(2);
     if (k['0'] || k['`']) this.selectSkill(-1);
     if (k['q']) { this.usePotion(0); k['q'] = false; }
     if (k['e']) { this.usePotion(1); k['e'] = false; }

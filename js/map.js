@@ -142,13 +142,13 @@ function genDungeon(floor, derived) {
 
   for (const r of rooms) {
     if (r === start) continue;
-    // 敵
-    let count = randInt(0, 1 + Math.min(floor, 3));
+    // 敵（すべての部屋に最低1体）
+    let count = randInt(1, 1 + Math.min(floor, 3));
     if (r === bossRoom && floor >= 2) {
       // ボス部屋（報酬ポータルを守る）
       const bossPool = floor >= 3 ? ['ogre', 'necromancer', 'lich'] : ['lich', 'necromancer'];
       enemySpawns.push({ type: choice(bossPool), x: (r.ccx + 0.5) * CONFIG.TILE, y: (r.ccy + 0.5) * CONFIG.TILE });
-      count = Math.max(0, count - 2);
+      count = Math.max(1, count - 1);
     }
     for (let i = 0; i < count; i++) {
       const type = weightedPick(floorTypes);

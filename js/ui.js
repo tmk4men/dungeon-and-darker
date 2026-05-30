@@ -74,6 +74,21 @@ const UI = {
     return `<span class="item-line">${icon}<span class="rar" style="color:${r.color}">${itemDisplayName(it)}</span></span>`;
   },
 
+  // -------- スタート画面 --------
+  showStart(hasSave) {
+    this.hud.style.display = 'none';
+    this.panel(`<div class="start-screen">
+      <div class="start-wheel"><span></span><span></span><span></span></div>
+      <div class="start-mark">六道輪廻</div>
+      <h1 class="title start-title">輪廻 <span>R I N N E</span></h1>
+      <p class="subtitle">巡り、堕ち、また還る。<br>六道・十界をさまよう、ドット絵のエクストラクション型ダンジョン。</p>
+      <button class="btn big startbtn">${hasSave ? '修行を続ける' : '門を入る'}</button>
+      <div class="start-foot">死ねば全てを失い、また人間界へ還る</div>
+    </div>`);
+    const sb = this.root.querySelector('.startbtn');
+    if (sb) sb.addEventListener('click', () => { Audio2.play && Audio2.play('ui'); Game.startGame(); });
+  },
+
   // -------- 職業選択 --------
   showClassSelect() {
     this.hud.style.display = 'none';
@@ -224,7 +239,7 @@ const UI = {
   },
 
   tabSkill(p, d) {
-    if (!p.loadout) p.loadout = [...CLASSES[p.classId].skills];
+    if (!p.loadout || !p.loadout.length) p.loadout = (CLASS_SKILL_POOL[p.classId] || CLASSES[p.classId].skills).slice(0, 3);
     const pool = CLASS_SKILL_POOL[p.classId] || CLASSES[p.classId].skills;
     const cards = pool.map(sid => {
       const s = SKILLS[sid]; const on = p.loadout.includes(sid);
@@ -232,10 +247,10 @@ const UI = {
         <div class="sc-top"><span class="sc-ic">${(typeof Sprites !== 'undefined' && Sprites.skillURL(sid)) ? `<img class="sk-i" src="${Sprites.skillURL(sid)}">` : s.icon}</span><b>${s.name}</b></div>
         <div class="sc-meta">${s.mp} MP ・ CD ${s.cd}s ・ ${s.scaling ? STAT_NAMES[s.scaling] + '依存' : '補助'}</div>
         <div class="sc-desc">${s.desc}</div>
-        <button class="btn sm skilltoggle ${on ? '' : ''}" data-sid="${sid}" ${!on && p.loadout.length >= 2 ? 'disabled' : ''}>${on ? '装備中（外す）' : '装備する'}</button>
+        <button class="btn sm skilltoggle" data-sid="${sid}" ${!on && p.loadout.length >= 3 ? 'disabled' : ''}>${on ? '装備中（外す）' : '装備する'}</button>
       </div>`;
     }).join('');
-    return `<div class="card"><h3>スキル選択 — 2つまで装備（現在 ${p.loadout.length}/2）</h3>
+    return `<div class="card"><h3>スキル選択 — 3つまで装備（現在 ${p.loadout.length}/3）</h3>
       <div class="skill-grid">${cards}</div></div>`;
   },
 
@@ -403,9 +418,9 @@ const UI = {
     // スキル選択
     this.root.querySelectorAll('.skilltoggle').forEach(b => b.addEventListener('click', () => {
       const sid = b.dataset.sid;
-      if (!p.loadout) p.loadout = [...CLASSES[p.classId].skills];
+      if (!p.loadout) p.loadout = [];
       if (p.loadout.includes(sid)) p.loadout = p.loadout.filter(x => x !== sid);
-      else if (p.loadout.length < 2) p.loadout.push(sid);
+      else if (p.loadout.length < 3) p.loadout.push(sid);
       Audio2.play && Audio2.play('select');
       reload();
     }));
@@ -468,31 +483,39 @@ const UI = {
 
   buildSkillBar(game) {
     const p = game.player;
-    let html = `<div class="skillrow">`;
-    // ノーマル
-    html += `<button class="skbtn ${game.selectedSkill === -1 ? 'sel' : ''}" data-sk="-1">
-      <div class="skic">${game.derived.wtype.kind === 'magic' ? '杖' : game.derived.wtype.kind === 'ranged' ? '弓' : '剣'}</div>
-      <div class="sklbl">通常</div></button>`;
-    p.skills.forEach((sid, i) => {
-      const s = SKILLS[sid];
-      const cd = p.skillCd[i];
-      const noMp = p.mp < s.mp;
-      const su = (typeof Sprites !== 'undefined') ? Sprites.skillURL(sid) : '';
-      html += `<button class="skbtn ${game.selectedSkill === i ? 'sel' : ''} ${cd > 0 || noMp ? 'dis' : ''}" data-sk="${i}">
-        <div class="skic">${su ? `<img class="sk-i" src="${su}">` : s.icon}</div>
-        <div class="sklbl">${s.name}</div>
-        <div class="skmp">${s.mp}MP</div>
-        ${cd > 0 ? `<div class="skcd">${cd.toFixed(1)}</div>` : ''}
-      </button>`;
+    // 右スティックの周囲に弧状配置：通常→スキル→ポーション
+    const nodes = [{ kind: 'normal' }];
+    p.skills.forEach((sid, i) => nodes.push({ kind: 'skill', sid, i }));
+    p.potions.forEach((it, i) => nodes.push({ kind: 'pot', it, i }));
+    const n = nodes.length;
+    const A0 = 80, A1 = 252; // 数学角（90°が真上）。上→左→下へ弧を描く
+    const place = (idx) => {
+      const th = (n <= 1 ? (A0 + A1) / 2 : A0 + (A1 - A0) * idx / (n - 1)) * Math.PI / 180;
+      return `left:calc(var(--skr) * ${Math.cos(th).toFixed(4)});top:calc(var(--skr) * ${(-Math.sin(th)).toFixed(4)});`;
+    };
+    let html = '';
+    nodes.forEach((nd, idx) => {
+      const pos = place(idx);
+      if (nd.kind === 'normal') {
+        html += `<button class="skbtn ${game.selectedSkill === -1 ? 'sel' : ''}" data-sk="-1" style="${pos}">
+          <div class="skic">${game.derived.wtype.kind === 'magic' ? '杖' : game.derived.wtype.kind === 'ranged' ? '弓' : '剣'}</div>
+          <div class="sklbl">通常</div></button>`;
+      } else if (nd.kind === 'skill') {
+        const s = SKILLS[nd.sid]; const cd = p.skillCd[nd.i]; const noMp = p.mp < s.mp;
+        const su = (typeof Sprites !== 'undefined') ? Sprites.skillURL(nd.sid) : '';
+        html += `<button class="skbtn ${game.selectedSkill === nd.i ? 'sel' : ''} ${cd > 0 || noMp ? 'dis' : ''}" data-sk="${nd.i}" style="${pos}">
+          <div class="skic">${su ? `<img class="sk-i" src="${su}">` : s.icon}</div>
+          <div class="sklbl">${s.name}</div>
+          <div class="skmp">${s.mp}MP</div>
+          ${cd > 0 ? `<div class="skcd">${cd.toFixed(1)}</div>` : ''}
+        </button>`;
+      } else {
+        const it = nd.it; const purl = it && typeof Sprites !== 'undefined' ? Sprites.iconURL(it) : '';
+        html += `<button class="potbtn ${it ? '' : 'empty'}" data-pot="${nd.i}" style="${pos}">
+          ${it ? `${purl ? `<img class="potic-img" src="${purl}" alt="">` : `<div class="potic">${it.potion && it.potion.mp ? 'MP' : 'HP'}</div>`}<div class="potlbl">${it.name.replace('ポーション', '')}</div>` : '<div class="potic">＋</div>'}
+        </button>`;
+      }
     });
-    html += `</div><div class="potrow">`;
-    p.potions.forEach((it, i) => {
-      const purl = it && typeof Sprites !== 'undefined' ? Sprites.iconURL(it) : '';
-      html += `<button class="potbtn ${it ? '' : 'empty'}" data-pot="${i}">
-        ${it ? `${purl ? `<img class="potic-img" src="${purl}" alt="">` : `<div class="potic">${it.potion && it.potion.mp ? 'MP' : 'HP'}</div>`}<div class="potlbl">${it.name.replace('ポーション', '')}</div>` : '<div class="potic">＋</div>'}
-      </button>`;
-    });
-    html += `</div>`;
     document.getElementById('skillbar').innerHTML = html;
     document.querySelectorAll('#skillbar .skbtn').forEach(b => b.addEventListener('click', () => Game.selectSkill(+b.dataset.sk)));
     document.querySelectorAll('#skillbar .potbtn').forEach(b => b.addEventListener('click', () => Game.usePotion(+b.dataset.pot)));
@@ -643,13 +666,14 @@ const UI = {
     this.panel(`<div class="bag-screen">
       <div class="bag-top"><b>持ち物</b><span class="muted">空き ${free}マス${chest ? '　（宝箱を開封中）' : ''}</span><button class="btn sm bagclose">閉じる</button></div>
       <div class="bag-cols">
-        <div class="bag-pane"><h3>${srcTitle}</h3>${srcHtml}</div>
-        <div class="bag-pane">
+        <div class="bag-pane loot-pane"><h3>${srcTitle}</h3>${srcHtml}</div>
+        <div class="bag-pane mine-pane">
           <h3>バッグ</h3>
           <div class="bag-grid" style="grid-template-columns:repeat(${bag.w},1fr);grid-template-rows:repeat(${bag.h},1fr);aspect-ratio:${bag.w}/${bag.h}">${cells}${items}</div>
           ${actHtml}
+          <h3 class="eq-sub">装備</h3>
+          <div class="eqgrid">${eqHtml}</div>
         </div>
-        <div class="bag-pane"><h3>装備</h3>${eqHtml}</div>
       </div>
     </div>`);
 

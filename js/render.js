@@ -515,11 +515,10 @@ const Render = {
       const prog = 1 - e.windT / e.windMax;
       ctx.save(); ctx.translate(s.x, s.y);
       if (def.behavior === 'ranged') {
-        ctx.strokeStyle = `rgba(255,70,70,${0.3 + prog * 0.5})`;
-        ctx.lineWidth = 2 + prog * 2; ctx.setLineDash([8, 6]);
-        ctx.beginPath(); ctx.moveTo(0, -6);
-        ctx.lineTo(Math.cos(e.facing) * 460, Math.sin(e.facing) * 460 - 6); ctx.stroke();
-        ctx.setLineDash([]);
+        // 線は出さない：敵自身がほのかに赤く脈打つ予兆のみ
+        ctx.strokeStyle = `rgba(255,70,70,${0.25 + prog * 0.45})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(0, -6, r + 4 + prog * 5, 0, TAU); ctx.stroke();
       } else {
         ctx.fillStyle = `rgba(255,60,60,${0.18 + prog * 0.4})`;
         ctx.beginPath(); ctx.moveTo(0, -6);

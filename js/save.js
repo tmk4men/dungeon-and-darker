@@ -10,7 +10,7 @@ function newProfile(classId) {
     classId,
     gold: 80,
     level: 1, xp: 0, points: 0,
-    loadout: [...cls.skills],            // 装備中スキル2つ（プールから選択）
+    loadout: (CLASS_SKILL_POOL[classId] || cls.skills).slice(0, 3), // 装備スキル（最大3）
     baseAttrs: { ...cls.base },          // 職業基礎＋レベルで割り振った分
     equipment: { weapon: null, head: null, chest: null, hands: null, legs: null, ring: null, torch: null },
     potions: new Array(CONFIG.POTION_SLOTS).fill(null),
