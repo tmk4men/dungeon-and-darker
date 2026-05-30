@@ -84,7 +84,7 @@ const UI = {
     Game.derived = d;
     const cls = CLASSES[p.classId];
     const nav = ['status', 'skill', 'equip', 'forge', 'stash', 'shop', 'bounty', 'deploy'];
-    const navName = { status: '⚔ ステータス', skill: '✨ スキル', equip: '🛡 装備', forge: '🔨 鍛冶', stash: '🎒 倉庫', shop: '💰 ショップ', bounty: '📜 依頼', deploy: '🚪 出撃' };
+    const navName = { status: 'ステータス', skill: 'スキル', equip: '装備', forge: '鍛冶', stash: '倉庫', shop: 'ショップ', bounty: '依頼', deploy: '出撃' };
     let body = '';
     if (tab === 'status') body = this.tabStatus(p, d, cls);
     else if (tab === 'skill') body = this.tabSkill(p, d);
@@ -98,7 +98,7 @@ const UI = {
     this.panel(`<div class="town">
       <div class="town-top">
         <div class="town-title">拠点 — <b style="color:${cls.color}">${cls.name}</b> <span class="lvl">Lv.${p.level}</span></div>
-        <div class="town-gold">💰 ${fmt(p.gold)} G</div>
+        <div class="town-gold">${fmt(p.gold)} G</div>
       </div>
       <div class="town-nav">${nav.map(n => `<button class="tnav ${n === tab ? 'on' : ''}" data-t="${n}">${navName[n]}</button>`).join('')}</div>
       <div class="town-body">${body}</div>
@@ -117,7 +117,7 @@ const UI = {
     const derivedRows = [
       ['最大HP', Math.round(d.hpmax)], ['最大MP', Math.round(d.mpmax)],
       ['物理攻撃力', d.wtype.base + d.patkFlat], ['魔法攻撃力', d.wtype.base + d.matkFlat],
-      ['防御', d.defense], ['移動速度', Math.round(d.speed) + (d.encumbered ? ' ⚠重量超過' : '')],
+      ['防御', d.defense], ['移動速度', Math.round(d.speed) + (d.encumbered ? ' 重量超過' : '')],
       ['重量', `${d.weight.toFixed(1)} / ${Math.round(d.weightCap)}`],
       ['会心率', Math.round(d.crit * 100) + '%'], ['会心ダメージ', Math.round(d.critDmg * 100) + '%'],
       ['回避', Math.round(d.dodge * 100) + '%'], ['吸血', Math.round(d.lifesteal * 100) + '%'],
@@ -140,7 +140,7 @@ const UI = {
           <div class="drow"><span>撃破数</span><b>${p.runStats.kills}</b></div>
         </div>
         <div class="card"><h3>実績（${Object.keys(p.achievements || {}).length}/${Object.keys(ACHIEVEMENTS).length}）</h3>
-          ${Object.keys(ACHIEVEMENTS).map(id => { const a = ACHIEVEMENTS[id]; const got = p.achievements && p.achievements[id]; return `<div class="ach ${got ? 'got' : ''}"><b>${got ? '🏆' : '🔒'} ${a.name}</b><span>${a.desc}</span></div>`; }).join('')}
+          ${Object.keys(ACHIEVEMENTS).map(id => { const a = ACHIEVEMENTS[id]; const got = p.achievements && p.achievements[id]; return `<div class="ach ${got ? 'got' : ''}"><b>${got ? '◆' : '◇'} ${a.name}</b><span>${a.desc}</span></div>`; }).join('')}
         </div>
       </div>
     </div>`;
@@ -154,10 +154,10 @@ const UI = {
         <div class="brow"><b>${b.label}</b><span class="val">報酬 ${fmt(b.reward)}G</span></div>
         <div class="xpbar" style="margin:8px 0"><div style="width:${pct}%"></div></div>
         <div class="brow"><span class="muted">${Math.min(b.progress, b.target)} / ${b.target}</span>
-          ${b.done && !b.claimed ? `<button class="btn sm claim" data-id="${b.id}">🎁 報酬を受け取る</button>` : b.claimed ? '<span class="muted">受取済</span>' : '<span class="muted">進行中…</span>'}</div>
+          ${b.done && !b.claimed ? `<button class="btn sm claim" data-id="${b.id}">報酬を受け取る</button>` : b.claimed ? '<span class="muted">受取済</span>' : '<span class="muted">進行中…</span>'}</div>
       </div>`;
     }).join('');
-    return `<div class="card"><h3>📜 依頼ボード</h3><p class="muted">ダンジョンでの成果は自動で記録されます。達成した依頼の報酬を受け取ると、新しい依頼に切り替わります。</p></div>${rows}`;
+    return `<div class="card"><h3>依頼ボード</h3><p class="muted">ダンジョンでの成果は自動で記録されます。達成した依頼の報酬を受け取ると、新しい依頼に切り替わります。</p></div>${rows}`;
   },
 
   tabSkill(p, d) {
@@ -169,7 +169,7 @@ const UI = {
         <div class="sc-top"><span class="sc-ic">${s.icon}</span><b>${s.name}</b></div>
         <div class="sc-meta">${s.mp} MP ・ CD ${s.cd}s ・ ${s.scaling ? STAT_NAMES[s.scaling] + '依存' : '補助'}</div>
         <div class="sc-desc">${s.desc}</div>
-        <button class="btn sm skilltoggle ${on ? '' : ''}" data-sid="${sid}" ${!on && p.loadout.length >= 2 ? 'disabled' : ''}>${on ? '✓ 装備中（外す）' : '装備する'}</button>
+        <button class="btn sm skilltoggle ${on ? '' : ''}" data-sid="${sid}" ${!on && p.loadout.length >= 2 ? 'disabled' : ''}>${on ? '装備中（外す）' : '装備する'}</button>
       </div>`;
     }).join('');
     return `<div class="card"><h3>スキル選択 — 2つまで装備（現在 ${p.loadout.length}/2）</h3>
@@ -191,7 +191,7 @@ const UI = {
           ${enOk ? `<button class="btn sm ench ${p.gold >= enchantCost(it) ? '' : 'poor'}" data-uid="${it.uid}">エンチャント（${fmt(enchantCost(it))}G）</button>` : ''}
         </div></div>`;
     }).join('');
-    return `<div class="card"><h3>🔨 鍛冶屋 — 強化／エンチャント</h3>
+    return `<div class="card"><h3>鍛冶屋 — 強化／エンチャント</h3>
       <p class="muted">強化（最大+5）で全ステータス上昇。エンチャント（最大2回）でランダムなステータスを付与。装備中の品もそのまま強化できます。</p>${rows}</div>`;
   },
 
@@ -249,7 +249,7 @@ const UI = {
       <button class="btn sm danger sell" data-uid="${it.uid}">${fmt(Math.round(it.value * 0.6))}G 売却</button>
     </div>`).join('') : '<div class="muted">売る物がありません</div>';
     return `<div class="cols">
-      <div class="col"><div class="card"><h3>購入 <button class="btn sm refresh" style="float:right">🔄 入荷</button></h3>${buy}</div></div>
+      <div class="col"><div class="card"><h3>購入 <button class="btn sm refresh" style="float:right">入荷</button></h3>${buy}</div></div>
       <div class="col"><div class="card"><h3>売却（倉庫から）</h3>${sellList}</div></div>
     </div>`;
   },
@@ -264,7 +264,7 @@ const UI = {
         <p class="muted">装備スキル：${lo}</p>
         <p class="muted">持ち込む装備：${eq}</p>
         <p class="muted">ポーション：${pot}</p>
-        <p class="warn">⚠ 死亡すると持ち込んだ装備・ポーション・取得品は全て失われます。脱出ポータルから帰還して初めて戦利品が確定します。</p>
+        <p class="warn">死亡すると持ち込んだ装備・ポーション・取得品は全て失われます。脱出ポータルから帰還して初めて戦利品が確定します。</p>
       </div></div>
       <div class="col"><div class="card">
         <h3>潜入する階層を選択</h3>
@@ -381,7 +381,7 @@ const UI = {
     let html = `<div class="skillrow">`;
     // ノーマル
     html += `<button class="skbtn ${game.selectedSkill === -1 ? 'sel' : ''}" data-sk="-1">
-      <div class="skic">${game.derived.wtype.kind === 'magic' ? '🪄' : game.derived.wtype.kind === 'ranged' ? '🏹' : '🗡'}</div>
+      <div class="skic">${game.derived.wtype.kind === 'magic' ? '杖' : game.derived.wtype.kind === 'ranged' ? '弓' : '剣'}</div>
       <div class="sklbl">通常</div></button>`;
     p.skills.forEach((sid, i) => {
       const s = SKILLS[sid];
@@ -397,7 +397,7 @@ const UI = {
     html += `</div><div class="potrow">`;
     p.potions.forEach((it, i) => {
       html += `<button class="potbtn ${it ? '' : 'empty'}" data-pot="${i}">
-        ${it ? `<div class="potic">${it.potion && it.potion.mp ? '🔵' : '🔴'}</div><div class="potlbl">${it.name.replace('ポーション', '')}</div>` : '<div class="potic">＋</div>'}
+        ${it ? `<div class="potic">${it.potion && it.potion.mp ? 'MP' : 'HP'}</div><div class="potlbl">${it.name.replace('ポーション', '')}</div>` : '<div class="potic">＋</div>'}
       </button>`;
     });
     html += `</div>`;
@@ -415,19 +415,19 @@ const UI = {
     if (ht) ht.textContent = `${Math.max(0, Math.round(p.hp))}/${Math.round(d.hpmax)}`;
     if (mt) mt.textContent = `${Math.round(p.mp)}/${Math.round(d.mpmax)}`;
     const info = document.getElementById('runinfo');
-    if (info) info.textContent = `第${game.floor}層　撃破 ${game.run.kills}　戦利品 ${game.run.loot.length}　💰${game.run.gold}`;
+    if (info) info.textContent = `第${game.floor}層　撃破 ${game.run.kills}　戦利品 ${game.run.loot.length}　金 ${game.run.gold}`;
     const db = document.getElementById('dodgebtn');
     if (db) db.classList.toggle('cool', p.dodgeCd > 0);
     const ib = document.getElementById('interactbtn');
     if (ib) {
-      if (game.nearAltar) { ib.style.display = 'block'; ib.textContent = (game.nearAltar.type === 'sacrifice' ? '🩸 捧げる' : '🔮 祈る'); }
+      if (game.nearAltar) { ib.style.display = 'block'; ib.textContent = (game.nearAltar.type === 'sacrifice' ? '捧げる' : '祈る'); }
       else ib.style.display = 'none';
     }
     const zi = document.getElementById('zoneinfo');
     if (zi && game.zone) {
       const t = game.runTime, z = game.zone;
-      if (t < z.grace) { zi.textContent = `🌑 闇の侵食まで ${Math.ceil(z.grace - t)}秒`; zi.className = 'zoneinfo'; }
-      else { zi.textContent = '⚠ 闇が迫っている — 脱出せよ'; zi.className = 'zoneinfo warn'; }
+      if (t < z.grace) { zi.textContent = `闇の侵食まで ${Math.ceil(z.grace - t)}秒`; zi.className = 'zoneinfo'; }
+      else { zi.textContent = '闇が迫っている — 脱出せよ'; zi.className = 'zoneinfo warn'; }
     }
     // クールダウン表示更新（軽量に再描画）
     const bar = document.getElementById('skillbar');
@@ -452,7 +452,7 @@ const UI = {
     if (!el) return;
     if (prog <= 0) { el.style.display = 'none'; return; }
     el.style.display = 'block';
-    el.innerHTML = `<div class="exlabel">${bonus ? '★ 報酬ポータルで脱出中…' : '脱出中…'}</div><div class="exbar"><div style="width:${prog * 100}%;${bonus ? 'background:linear-gradient(90deg,#ffce6b,#fff0c8)' : ''}"></div></div>`;
+    el.innerHTML = `<div class="exlabel">${bonus ? '報酬ポータルで脱出中…' : '脱出中…'}</div><div class="exbar"><div style="width:${prog * 100}%;${bonus ? 'background:linear-gradient(90deg,#ffce6b,#fff0c8)' : ''}"></div></div>`;
   },
 
   flashDamage() {
@@ -477,7 +477,7 @@ const UI = {
     let lostHtml = '';
     if (!win && data.lost && data.lost.length) lostHtml = `<div class="card lost"><h3>失った物</h3>${data.lost.map(it => `<div class="res-item">${this.rarityTag(it)}</div>`).join('')}</div>`;
     this.panel(`<div class="screen result ${win ? 'win' : 'lose'}">
-      <h1 class="res-title">${win ? '🏆 脱出成功！' : '💀 死亡…'}</h1>
+      <h1 class="res-title">${win ? '脱出成功' : '死亡'}</h1>
       <p class="subtitle">${win ? '戦利品を持ち帰った。' : '持ち込んだ全てを失った。だが経験は残る。'}</p>
       <div class="res-stats">
         <div><span>撃破数</span><b>${data.kills}</b></div>

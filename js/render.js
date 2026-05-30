@@ -241,7 +241,7 @@ const Render = {
       ctx.shadowBlur = 0;
       ctx.fillStyle = portal.bonus ? '#fff0c8' : '#eaffff';
       ctx.font = 'bold 12px "Cinzel", serif'; ctx.textAlign = 'center';
-      ctx.fillText(portal.bonus ? '★報酬の脱出' : '脱出', 0, -R - 6);
+      ctx.fillText(portal.bonus ? '報酬の脱出' : '脱出', 0, -R - 6);
     } else {
       // 未開放：暗くロック表示＋カウントダウン
       ctx.fillStyle = hexA(col, 0.12);
@@ -249,7 +249,7 @@ const Render = {
       ctx.strokeStyle = hexA('#888', 0.5); ctx.lineWidth = 2; ctx.setLineDash([5, 5]);
       ctx.beginPath(); ctx.arc(0, 0, R * 0.6, 0, TAU); ctx.stroke(); ctx.setLineDash([]);
       ctx.fillStyle = '#cfcfd6'; ctx.font = 'bold 11px sans-serif'; ctx.textAlign = 'center';
-      ctx.fillText('🔒 ' + Math.ceil(portal.openAt - game.runTime) + 's', 0, -R - 4);
+      ctx.fillText('封 ' + Math.ceil(portal.openAt - game.runTime) + 's', 0, -R - 4);
     }
     ctx.restore();
   },
@@ -272,7 +272,7 @@ const Render = {
       ctx.beginPath(); ctx.arc(0, -14, 22, 0, TAU); ctx.fill();
       ctx.fillStyle = col;
       ctx.font = '16px sans-serif'; ctx.textAlign = 'center';
-      ctx.fillText(a.type === 'sacrifice' ? '🩸' : '🔮', 0, -9);
+      ctx.fillText(a.type === 'sacrifice' ? '血' : '聖', 0, -9);
       ctx.fillStyle = hexA(col, 0.9); ctx.font = 'bold 10px sans-serif';
       ctx.fillText(a.type === 'sacrifice' ? '生贄の祭壇' : '聖域', 0, -26);
     }
@@ -440,7 +440,7 @@ const Render = {
     ctx.beginPath(); ctx.arc(0, by - 3, r - 6, 0, TAU); ctx.fill();
     this.drawBar(ctx, -r, by - r - 8, r * 2, 5, e.hp / e.maxhp, '#ff7ad0', '#3a0e2a');
     ctx.fillStyle = '#ff9fe0'; ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'center';
-    ctx.fillText('⚔ ライバル冒険者', 0, by - r - 12);
+    ctx.fillText('ライバル冒険者', 0, by - r - 12);
     ctx.restore();
   },
 

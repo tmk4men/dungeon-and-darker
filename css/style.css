@@ -88,7 +88,7 @@ button { font-family: inherit; cursor: pointer; color: var(--ink); }
 @keyframes emberGlow { 0%,100% { filter: drop-shadow(0 2px 0 #3a2a10) drop-shadow(0 0 22px rgba(255,150,50,.22)); } 50% { filter: drop-shadow(0 2px 0 #3a2a10) drop-shadow(0 0 34px rgba(255,180,80,.4)); } }
 .title span { color: var(--blood); -webkit-text-fill-color: #c23a2c; font-family: var(--f-display); }
 .subtitle { color: var(--ink-dim); margin: 14px auto 26px; font-size: 14px; line-height: 1.8; max-width: 680px; font-family: var(--f-flavor); font-style: italic; }
-.title + .subtitle::before, .title + .subtitle::after { content: '✦'; color: var(--gold); margin: 0 10px; font-style: normal; }
+.title + .subtitle::before, .title + .subtitle::after { content: '◆'; color: var(--gold); margin: 0 10px; font-style: normal; font-size: .7em; vertical-align: middle; }
 
 /* class select */
 .class-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(232px, 1fr)); gap: 16px; }

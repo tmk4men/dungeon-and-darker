@@ -29,7 +29,7 @@
       <!-- 上中央：ゾーン収縮タイマー -->
       <div id="zoneinfo" class="zoneinfo"></div>
       <!-- 右上：ミュート＆退却 -->
-      <button id="mute" class="hud-btn">🔊</button>
+      <button id="mute" class="hud-btn">音</button>
       <button id="abandon" class="hud-btn">≡ 退却</button>
       <!-- 中央：脱出ゲージ -->
       <div id="extract"></div>
@@ -38,7 +38,7 @@
       <!-- 回避ローリング -->
       <button id="dodgebtn" class="dodgebtn">回避<span>ROLL</span></button>
       <!-- 祭壇/聖域 インタラクト -->
-      <button id="interactbtn" class="interactbtn">🔮 祈る</button>
+      <button id="interactbtn" class="interactbtn">祈る</button>
       <!-- 操作ヒント -->
       <div class="hint left-hint">移動</div>
       <div class="hint right-hint">スキル選択→ここをドラッグで攻撃</div>
@@ -51,7 +51,7 @@
     <div id="toast"></div>
 
     <!-- 縦持ち注意 -->
-    <div id="rotate">📱 横向きにしてプレイしてください</div>
+    <div id="rotate">横向きにしてプレイしてください</div>
 
     <!-- 質感オーバーレイ -->
     <div id="grain"></div>
@@ -81,7 +81,7 @@
     // ミュート
     document.getElementById('mute').addEventListener('click', (e) => {
       const m = Audio2.toggleMute();
-      e.currentTarget.textContent = m ? '🔇' : '🔊';
+      e.currentTarget.textContent = m ? '消' : '音';
     });
     // オーディオはユーザー操作で解放（モバイル対策）
     const unlock = () => { Audio2.init(); Audio2.resume(); window.removeEventListener('pointerdown', unlock); window.removeEventListener('keydown', unlock); };

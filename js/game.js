@@ -621,7 +621,7 @@ const Game = {
     if (p.achievements[id]) return;
     p.achievements[id] = true;
     p.gold += 50;
-    this.toast('🏆 実績解除：' + ACHIEVEMENTS[id].name + '（+50G）');
+    this.toast('実績解除：' + ACHIEVEMENTS[id].name + '（+50G）');
     Audio2.play('levelup');
     saveProfile(p);
   },
@@ -631,7 +631,7 @@ const Game = {
     for (const b of p.bounties) {
       if (b.type !== type || b.done) continue;
       if (setMax) b.progress = Math.max(b.progress, amt); else b.progress += amt;
-      if (b.progress >= b.target) { b.done = true; this.toast('📜 依頼達成：' + b.label + '（拠点で報酬受取）'); }
+      if (b.progress >= b.target) { b.done = true; this.toast('依頼達成：' + b.label + '（拠点で報酬受取）'); }
     }
   },
 
@@ -652,7 +652,7 @@ const Game = {
       if (dd <= def.range + CONFIG.PLAYER_R + 8) {
         this.hurtPlayer(e.atk, false);
         this.burst(p.x, p.y, '#ff8a6a', 6);
-        if (def.web) { p.slowT = 2; p.slowMul = 0.55; this.addFloat(p.x, p.y - 30, '🕸 鈍足', '#b0d0a0', 13); }
+        if (def.web) { p.slowT = 2; p.slowMul = 0.55; this.addFloat(p.x, p.y - 30, '鈍足', '#b0d0a0', 13); }
         if (onHit) this.applyOnHitToPlayer(onHit);
       }
     }
@@ -661,7 +661,7 @@ const Game = {
   applyOnHitToPlayer(onHit) {
     const p = this.player;
     if (onHit.slow) { p.slowT = Math.max(p.slowT, onHit.slow.dur); p.slowMul = onHit.slow.mult; }
-    if (onHit.dot) { p.dotT = onHit.dot.dur; p.dotDmg = onHit.dot.dmg; this.addFloat(p.x, p.y - 30, '🔥', '#ff7a3c', 14); }
+    if (onHit.dot) { p.dotT = onHit.dot.dur; p.dotDmg = onHit.dot.dmg; this.addFloat(p.x, p.y - 30, '炎', '#ff7a3c', 14); }
   },
 
   // 回避ローリング
@@ -859,7 +859,7 @@ const Game = {
     else {
       const k = clamp((t - z.grace) / z.shrinkDur, 0, 1);
       z.r = lerp(z.r0, z.minR, k);
-      if (!z.warned) { z.warned = true; Audio2.play('zone'); this.toast('⚠ 闇が侵食を始めた — 脱出を急げ'); }
+      if (!z.warned) { z.warned = true; Audio2.play('zone'); this.toast('闇が侵食を始めた — 脱出を急げ'); }
     }
     // 圏外ダメージ
     if (!p.dead && dist(p.x, p.y, z.cx, z.cy) > z.r) {
