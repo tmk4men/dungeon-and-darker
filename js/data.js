@@ -68,16 +68,25 @@ const SKILLS = {
   blink:       { name: 'ブリンク', icon: '瞬', mp: 8, cd: 4, kind: 'dash', dist: 240, dmg: 0.6, scaling: 'WILL', radius: 30, color: '#9fd0ff', desc: '瞬間移動で間合いを取る' },
   shadow_bolt: { name: 'シャドウボルト', icon: '闇', mp: 9, cd: 1.6, kind: 'projectile', scaling: 'WILL', dmg: 1.4, projSpeed: 480, radius: 14, color: '#9b4dff', desc: '闇の弾を放つ' },
   sweep:       { name: 'スイープ', icon: '薙', mp: 10, cd: 2.6, kind: 'melee', scaling: 'STR', dmg: 1.4, range: 124, arc: 1.4, color: '#d8d2c0', knock: 100, desc: '槍で遠く広く薙ぐ' },
+
+  // --- 追加スキル（状態シナジーを活かす） ---
+  guard_break: { name: 'ガードブレイク', icon: '砕', mp: 10, cd: 4, kind: 'melee', scaling: 'STR', dmg: 1.4, range: 84, arc: 1.6, color: '#ffd0a0', stun: 1.0, knock: 160, desc: '渾身の一撃で気絶＋崩す（急所）' },
+  ground_slam: { name: 'グランドスラム', icon: '震', mp: 14, cd: 5, kind: 'nova', scaling: 'STR', dmg: 1.3, radius: 130, color: '#d8a060', knock: 200, stun: 0.8, desc: '大地を叩き周囲を気絶＋吹き飛ばす' },
+  snare_shot:  { name: 'スネアショット', icon: '網', mp: 9, cd: 4, kind: 'projectile', scaling: 'DEX', dmg: 1.0, projSpeed: 560, radius: 9, color: '#7fe0c0', slow: { mult: 0.4, dur: 2.5 }, pierce: 1, desc: '敵を鈍足にする矢（砕き）' },
+  venom_burst: { name: 'ヴェノムバースト', icon: '瘴', mp: 13, cd: 5, kind: 'nova', scaling: 'DEX', dmg: 0.9, radius: 120, color: '#7fe07f', dot: { dmg: 6, dur: 4 }, desc: '毒霧で周囲をむしばむ（誘爆の種）' },
+  ice_lance:   { name: 'アイスランス', icon: '凍', mp: 9, cd: 2.2, kind: 'projectile', scaling: 'WILL', dmg: 1.5, projSpeed: 680, radius: 10, color: '#bfe8ff', slow: { mult: 0.45, dur: 2.5 }, pierce: 1, desc: '凍て付く槍で鈍足化（砕き）' },
+  meteor:      { name: 'メテオ', icon: '隕', mp: 18, cd: 7, kind: 'projectile', scaling: 'WILL', dmg: 2.0, projSpeed: 300, radius: 16, color: '#ff6a3c', explode: 80, desc: '巨大な火球を落とす（大爆発）' },
+  judgment:    { name: 'ジャッジメント', icon: '裁', mp: 13, cd: 4, kind: 'projectile', scaling: 'WILL', dmg: 1.4, projSpeed: 520, radius: 18, color: '#fff1a6', holy: true, stun: 1.0, desc: '天罰の光で気絶（アンデッド特効）' },
 };
 
 // 各職業のスキルプール（タウンで2つ選んで装備）
 const CLASS_SKILL_POOL = {
-  fighter:   ['slash_wave', 'shield_wall', 'cleave', 'rally'],
-  barbarian: ['whirlwind', 'reckless', 'leap', 'warcry'],
-  ranger:    ['multishot', 'piercing', 'volley', 'smoke'],
-  rogue:     ['dash_strike', 'poison_dart', 'fan_knives', 'smoke'],
-  cleric:    ['heal', 'smite', 'bless', 'holy_nova'],
-  mage:      ['firebolt', 'frost_nova', 'arcane_orb', 'blink'],
+  fighter:   ['slash_wave', 'shield_wall', 'cleave', 'rally', 'guard_break', 'sweep', 'leap'],
+  barbarian: ['whirlwind', 'reckless', 'leap', 'warcry', 'charge', 'cleave', 'ground_slam'],
+  ranger:    ['multishot', 'piercing', 'volley', 'smoke', 'poison_dart', 'snare_shot', 'impale'],
+  rogue:     ['dash_strike', 'poison_dart', 'fan_knives', 'smoke', 'blink', 'venom_burst', 'impale'],
+  cleric:    ['heal', 'smite', 'bless', 'holy_nova', 'shield_wall', 'judgment', 'warcry'],
+  mage:      ['firebolt', 'frost_nova', 'arcane_orb', 'blink', 'shadow_bolt', 'ice_lance', 'meteor'],
 };
 
 // --- 職業 ---
