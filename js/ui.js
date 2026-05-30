@@ -137,7 +137,7 @@ const UI = {
     Game.derived = d;
     const cls = CLASSES[p.classId];
     const nav = ['status', 'class', 'skill', 'equip', 'forge', 'stash', 'shop', 'bounty', 'deploy'];
-    const navName = { status: '己', class: '道', skill: 'スキル', equip: '装備', forge: '鍛冶', stash: '倉庫', shop: 'ショップ', bounty: '請願', deploy: '出立' };
+    const navName = { status: '己', class: '職業', skill: 'スキル', equip: '装備', forge: '鍛冶', stash: '倉庫', shop: 'ショップ', bounty: '請願', deploy: '出発' };
     let body = '';
     if (tab === 'status') body = this.tabStatus(p, d, cls);
     else if (tab === 'class') body = this.tabClass(p);
@@ -491,7 +491,8 @@ const UI = {
     p.skills.forEach((sid, i) => nodes.push({ kind: 'skill', sid, i }));
     p.potions.forEach((it, i) => nodes.push({ kind: 'pot', it, i }));
     const n = nodes.length;
-    const A0 = 80, A1 = 252; // 数学角（90°が真上）。上→左→下へ弧を描く
+    // 上→左→左下の弧のみに配置。右下（親指で攻撃ドラッグを始める領域）は空けてスティック入力を奪わない
+    const A0 = 82, A1 = 212;
     const place = (idx) => {
       const th = (n <= 1 ? (A0 + A1) / 2 : A0 + (A1 - A0) * idx / (n - 1)) * Math.PI / 180;
       return `left:calc(var(--skr) * ${Math.cos(th).toFixed(4)});top:calc(var(--skr) * ${(-Math.sin(th)).toFixed(4)});`;
@@ -535,7 +536,7 @@ const UI = {
     const info = document.getElementById('runinfo');
     if (info) {
       const cu = (typeof Sprites !== 'undefined') ? Sprites.coinURL() : '';
-      const html = `${realmName(game.floor)}　撃破 ${game.run.kills}　戦利品 ${game.run.bag.items.length}　空${bagFreeCells(game.run.bag)}　${cu ? `<img class="coin-i" src="${cu}">` : '金'}${game.run.gold}`;
+      const html = `${realmName(game.floor)}　戦利品 ${game.run.bag.items.length}　${cu ? `<img class="coin-i" src="${cu}">` : '金'}${game.run.gold}`;
       if (this._lastRun !== html) { info.innerHTML = html; this._lastRun = html; }
     }
     const bb = document.getElementById('bagbtn');
