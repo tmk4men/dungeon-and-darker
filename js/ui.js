@@ -506,6 +506,12 @@ const UI = {
       else if (game.nearAltar) { ib.style.display = 'block'; ib.textContent = (game.nearAltar.type === 'sacrifice' ? '捧げる' : '祈る'); }
       else ib.style.display = 'none';
     }
+    const ki = document.getElementById('karmainfo');
+    if (ki && game.run) {
+      const tier = Math.min(3, Math.floor(game.run.karma / 15));
+      if (tier > 0) { ki.style.display = 'block'; ki.textContent = '業 ' + '●'.repeat(tier) + '○'.repeat(3 - tier) + ` 獄卒+${tier * 12}%`; }
+      else ki.style.display = 'none';
+    }
     const zi = document.getElementById('zoneinfo');
     if (zi && game.zone) {
       const t = game.runTime, z = game.zone;

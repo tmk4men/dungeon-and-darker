@@ -80,4 +80,55 @@ const Audio2 = {
   },
 
   toggleMute() { this.muted = !this.muted; if (this.master) this.master.gain.value = this.muted ? 0 : 0.5; return this.muted; },
+
+  // 寺の鐘（低い基音＋倍音、ゆっくり減衰）
+  bell(floor) {
+    if (!this.ctx || this.muted) return;
+    this.resume();
+    const t0 = this.ctx.currentTime;
+    const f = [118, 104, 92][Math.min(2, Math.floor((floor - 1) / 3))] || 100;
+    [[1, 0.16], [2.0, 0.07], [3.0, 0.045], [4.2, 0.025]].forEach(([m, v]) => {
+      const o = this.ctx.createOscillator(), g = this.ctx.createGain();
+      o.type = 'sine'; o.frequency.value = f * m;
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.exponentialRampToValueAtTime(v, t0 + 0.012);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + 2.8);
+      o.connect(g); g.connect(this.master); o.start(t0); o.stop(t0 + 2.9);
+    });
+  },
+
+  // ダンジョンのアンビエント（低いドローン＋揺らぎ＋鐘）
+  startAmbient(floor) {
+    if (!this.ctx) this.init();
+    if (!this.ctx) return;
+    this.stopAmbient();
+    this.resume();
+    const ctx = this.ctx;
+    const out = ctx.createGain(); out.gain.value = 0.0001; out.connect(this.master);
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = Math.max(220, 620 - floor * 36); lp.connect(out);
+    const root = 55; const freqs = [root, root * 1.5, root * 2];
+    const oscs = [];
+    freqs.forEach((fr, i) => {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = i === 2 ? 'triangle' : 'sine'; o.frequency.value = fr * (1 + i * 0.004);
+      g.gain.value = i === 2 ? 0.35 : 1; o.connect(g); g.connect(lp); o.start(); oscs.push(o);
+    });
+    const lfo = ctx.createOscillator(), lfg = ctx.createGain();
+    lfo.frequency.value = 0.07; lfg.gain.value = 0.018; lfo.connect(lfg); lfg.connect(out.gain); lfo.start();
+    out.gain.setTargetAtTime(0.05 + floor * 0.004, ctx.currentTime, 2.5);
+    this.ambient = { out, oscs, lfo, timer: null, floor };
+    const tick = () => { if (!this.ambient) return; this.bell(this.ambient.floor); this.ambient.timer = setTimeout(tick, 9000 + Math.random() * 10000); };
+    this.ambient.timer = setTimeout(tick, 5000 + Math.random() * 5000);
+  },
+  stopAmbient() {
+    if (!this.ambient) return;
+    const a = this.ambient; this.ambient = null;
+    try {
+      if (a.timer) clearTimeout(a.timer);
+      const t = this.ctx.currentTime;
+      a.out.gain.setTargetAtTime(0.0001, t, 0.4);
+      for (const o of a.oscs) o.stop(t + 1.0);
+      a.lfo.stop(t + 1.0);
+    } catch (e) {}
+  },
 };

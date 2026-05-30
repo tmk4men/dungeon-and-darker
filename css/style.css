@@ -286,6 +286,8 @@ button { font-family: inherit; cursor: pointer; color: var(--ink); }
 #zoneinfo { position: absolute; top: max(10px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%);
   font-family: var(--f-head); font-size: 12px; font-weight: 600; letter-spacing: 1px; color: #c79bff; text-shadow: 0 1px 5px #000; pointer-events: none; white-space: nowrap; }
 .zoneinfo.warn { color: #ff7a9a; animation: zonePulse .8s ease-in-out infinite; }
+.karmainfo { position: absolute; top: calc(max(10px, env(safe-area-inset-top)) + 18px); left: 50%; transform: translateX(-50%);
+  display: none; font-family: var(--f-head); font-size: 11px; font-weight: 600; letter-spacing: 1px; color: #ff7a5a; text-shadow: 0 1px 4px #000; pointer-events: none; white-space: nowrap; }
 @keyframes zonePulse { 0%,100% { opacity: 1; } 50% { opacity: .4; } }
 
 #extract { position: absolute; top: 36%; left: 50%; transform: translateX(-50%); display: none; text-align: center; pointer-events: none; }

@@ -58,6 +58,7 @@ const Game = {
   goTown(tab) {
     this.state = 'town';
     Input.enabled = false; Input.reset();
+    Audio2.stopAmbient();
     if (this.profile) {
       // 旧セーブの移行
       if (!CLASSES[this.profile.classId]) {
@@ -82,7 +83,7 @@ const Game = {
   enterDungeon() {
     this.floor = 1;
     this.derived = computeDerived(this.profile);
-    this.run = { loot: [], kills: 0, gold: 0, startGold: this.profile.gold };
+    this.run = { loot: [], kills: 0, gold: 0, startGold: this.profile.gold, karma: 0 };
     this.selectedSkill = -1;
 
     // プレイヤー生成（持ち込み装備のスナップショット）
@@ -111,7 +112,7 @@ const Game = {
   // 現在の深度でレベルを生成（プレイヤー状態は維持）
   buildLevel() {
     this.dgn = genDungeon(this.floor, this.derived);
-    this.projectiles = []; this.particles = []; this.floatTexts = []; this.fx = []; this.extractT = 0;
+    this.projectiles = []; this.particles = []; this.floatTexts = []; this.fx = []; this.aoes = []; this.extractT = 0;
     this.runTime = 0;
     this.enemies = this.dgn.enemySpawns.map(sp => this.makeEnemy(sp.type, sp.x, sp.y));
     this.groundItems = this.dgn.groundItems.slice();
@@ -125,6 +126,8 @@ const Game = {
     this.transitionT = 1.5; this.transitionName = realmName(this.floor);
     this.initZone();
     Audio2.init();
+    Audio2.startAmbient(this.floor);
+    Audio2.bell(this.floor);
   },
 
   // 階段で1つ深く潜る（難易度・レア度UP、装備/HP/戦利品は維持）
@@ -146,6 +149,7 @@ const Game = {
       r: def.r, state: 'idle', atkCd: rand(0, 1), wanderT: 0, wanderAng: rand(0, TAU),
       hitFlash: 0, dead: false, slowT: 0, slowMul: 1, dotT: 0, dotDmg: 0, knockX: 0, knockY: 0,
       stunT: 0, summonCd: rand(4, 7), windT: 0, windMax: 0, pending: null, elite: null, regenT: 0,
+      specialCd: def.boss ? rand(4, 6) : 0, special: null,
     };
     // ライバル冒険者：ランダムな職業を割り当て
     if (def.rival) {
@@ -252,8 +256,9 @@ const Game = {
     for (const e of this.enemies) if (!e.dead) this.updateEnemy(e, dt);
     this.enemies = this.enemies.filter(e => !e.dead || e.deathT > 0);
 
-    // 投射物
+    // 投射物・ボスAoE
     this.updateProjectiles(dt);
+    this.updateAoes(dt);
 
     // 環境演出：火の粉・塵が漂う
     if (Math.random() < dt * 5) {
@@ -305,6 +310,7 @@ const Game = {
   },
 
   buffMul(stat) { let m = 1; for (const b of this.player.buffs) if (b.stat === stat) m *= b.mult; return m; },
+  karmaTier() { return this.run ? clamp(Math.floor(this.run.karma / 15), 0, 3) : 0; },
 
   normalAttack(ang) {
     const p = this.player, d = p.derived, wt = d.wtype;
@@ -479,6 +485,8 @@ const Game = {
     this.hitStop = Math.max(this.hitStop, def.boss ? 0.12 : 0.04);
     this.addShake(def.boss ? 16 : (e.elite ? 7 : 3));
     this.run.kills++;
+    // 業（カルマ）：殺生で蓄積
+    this.run.karma += def.boss ? 10 : (e.elite ? 3 : 1);
     // 実績・依頼
     this.progressBounty('kills', 1);
     if (def.boss) { this.unlockAch('boss_slayer'); this.progressBounty('boss', 1); }
@@ -497,7 +505,7 @@ const Game = {
     const dropChance = def.boss ? 1 : (e.elite || e.rival ? 1 : 0.4);
     if (Math.random() < dropChance) {
       const n = def.boss ? 3 : (e.rival ? 3 : e.elite ? 2 : 1);
-      const luckBonus = (def.boss ? 8 : e.rival ? 6 : e.elite ? 5 : 0);
+      const luckBonus = (def.boss ? 8 : e.rival ? 6 : e.elite ? 5 : 0) + this.karmaTier() * 2;
       for (let i = 0; i < n; i++) {
         this.groundItems.push({ x: e.x + rand(-14, 14), y: e.y + rand(-14, 14), item: randomLoot(this.floor + (e.elite || e.rival ? 1 : 0), this.derived.attr.LUCK + luckBonus) });
       }
@@ -516,7 +524,7 @@ const Game = {
     const p = this.player, d = p.derived;
     if (p.dead || p.invuln > 0) return;
     if (Math.random() < d.dodge) { this.addFloat(p.x, p.y - 24, '回避', '#aef', 14); p.invuln = 0.15; return; }
-    let dmg = amount;
+    let dmg = amount * (1 + this.karmaTier() * 0.12); // 業が深いほど獄卒が強くなる
     if (magic) dmg *= (1 - d.magicResist);
     let defense = d.defense;
     for (const b of p.buffs) if (b.stat === 'defense') defense *= b.mult;
@@ -547,6 +555,7 @@ const Game = {
     e.hitFlash = Math.max(0, e.hitFlash - dt);
     e.atkCd = Math.max(0, e.atkCd - dt);
     e.attackT = Math.max(0, (e.attackT || 0) - dt);
+    if (def.boss) e.specialCd = Math.max(0, (e.specialCd || 0) - dt);
     e._moving = false;
     // ノックバック適用
     if (Math.abs(e.knockX) + Math.abs(e.knockY) > 1) {
@@ -580,6 +589,8 @@ const Game = {
 
     if (e.state === 'chase') {
       e.facing = angleOf(p.x - e.x, p.y - e.y);
+      // ボスの特殊技（予兆付き）
+      if (def.boss && e.specialCd <= 0 && e.windT <= 0) { this.startSpecial(e, def); return; }
       if (def.behavior === 'ranged') {
         if (dd > def.range * 0.8) this.moveEnemy(e, e.facing, spd, dt);
         else if (dd < def.range * 0.45) this.moveEnemy(e, e.facing + Math.PI, spd * 0.7, dt);
@@ -692,9 +703,54 @@ const Game = {
     }
   },
 
+  startSpecial(e, def) {
+    const map = { ogre: 'sweep', necromancer: 'aoe', lich: 'fan' };
+    e.special = map[e.type] || 'fan';
+    e.windT = 0.85; e.windMax = 0.85;
+    e.specialCd = rand(7, 10);
+    this.toast(def.name + ' が技を繰り出す');
+    Audio2.play('zone');
+  },
+
+  bossSpecial(e, def, kind) {
+    const p = this.player;
+    e.atkCd = 1.4;
+    if (kind === 'sweep') {
+      const range = def.range + 100;
+      this.spawnSlash(e.x, e.y, e.facing, 2.6, range, '#ff7a3c');
+      this.addShake(12); Audio2.play('crit');
+      if (dist(e.x, e.y, p.x, p.y) <= range && Math.abs(angDiff(e.facing, angleOf(p.x - e.x, p.y - e.y))) < 1.4) {
+        this.hurtPlayer(e.atk * 1.4, false);
+      }
+    } else if (kind === 'aoe') {
+      this.aoes.push({ x: p.x, y: p.y, r: 100, t: 1.0, maxt: 1.0, dmg: e.atk * 1.3, color: '#9b4dff' });
+      Audio2.play('magic');
+    } else { // fan：業火
+      for (let i = -2; i <= 2; i++) this.spawnProjectile('enemy', e.x, e.y, e.facing + i * 0.28, { speed: def.projSpeed, dmg: e.atk * 0.85, r: 10, color: '#ff7a3c', life: 2.6 });
+      Audio2.play('magic');
+    }
+  },
+
+  updateAoes(dt) {
+    if (!this.aoes) return;
+    const p = this.player;
+    for (const a of this.aoes) {
+      a.t -= dt;
+      if (a.t <= 0 && !a.done) {
+        a.done = true;
+        this.spawnRing(a.x, a.y, a.r * 0.4, a.r, a.color, 0.35, 4);
+        this.burst(a.x, a.y, a.color, 20, a.r);
+        this.addShake(8);
+        if (!p.dead && dist(a.x, a.y, p.x, p.y) <= a.r) this.hurtPlayer(a.dmg, true);
+      }
+    }
+    this.aoes = this.aoes.filter(a => a.t > -0.1);
+  },
+
   executeAttack(e, def) {
     const p = this.player;
     e.attackT = 0.2;
+    if (e.special) { const sp = e.special; e.special = null; this.bossSpecial(e, def, sp); return; }
     const onHit = e.elite && e.elite.onHit;
     if (def.behavior === 'ranged') {
       e.atkCd = 1.6;
@@ -863,6 +919,8 @@ const Game = {
     } else {
       a.used = true;
       this.burst(a.x, a.y, '#9fd0ff', 24);
+      // 聖域は業（カルマ）を浄化する
+      if (this.run.karma > 0) { this.run.karma = Math.max(0, this.run.karma - 18); this.addFloat(a.x, a.y - 26, '業を浄化', '#aef', 14); }
       if (Math.random() < 0.65) {
         const boon = choice([
           { stat: 'patk', mult: 1.3, name: '攻撃力上昇' },
@@ -981,6 +1039,7 @@ const Game = {
     const xp = Math.round(this.run.kills * 6 + this.floor * 10);
     grantXP(this.profile, xp);
     saveProfile(this.profile);
+    Audio2.stopAmbient();
     Audio2.play('death');
     UI.showResult(false, { kills: this.run.kills, gold: 0, xp, lost, loot: this.run.loot });
   },
@@ -1017,6 +1076,7 @@ const Game = {
     this.profile.runStats.gold += this.run.gold;
     saveProfile(this.profile);
     this.burst(this.player.x, this.player.y, '#7fd0ff', 30);
+    Audio2.stopAmbient();
     Audio2.play('extract');
     if (leveled) setTimeout(() => Audio2.play('levelup'), 500);
     UI.showResult(true, { kills: this.run.kills, gold: this.run.gold, xp, leveled, loot: this.run.loot });

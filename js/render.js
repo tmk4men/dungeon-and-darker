@@ -131,6 +131,8 @@ const Render = {
     ents.sort((a, b) => a.y - b.y);
     for (const e of ents) (e === game.player) ? this.drawPlayer(ctx, e) : this.drawEnemy(ctx, e, game);
 
+    // --- ボスAoE予告（地面に詠唱円） ---
+    if (game.aoes) for (const a of game.aoes) this.drawAoe(ctx, a);
     // --- 攻撃エフェクト・投射物・パーティクル ---
     if (game.fx) for (const f of game.fx) this.drawFx(ctx, f);
     for (const p of game.projectiles) this.drawProjectile(ctx, p);
@@ -141,6 +143,9 @@ const Render = {
 
     // --- ライティング ---
     this.drawLighting(game);
+
+    // --- 業（カルマ）の紅蓮テイント ---
+    if (game.run && game.run.karma > 0) this.drawKarma(game);
 
     // --- ゾーン収縮（闇の侵食）を最前面に ---
     if (game.zone) this.drawZone(game);
@@ -175,6 +180,20 @@ const Render = {
     ctx.strokeStyle = `rgba(200,64,47,${0.8 * cover})`; ctx.lineWidth = 3;
     ctx.beginPath(); ctx.moveTo(W / 2 - H * 0.16, H / 2 + H * 0.12); ctx.lineTo(W / 2 + H * 0.16, H / 2 + H * 0.12); ctx.stroke();
     ctx.restore(); ctx.globalAlpha = 1;
+  },
+
+  drawKarma(game) {
+    const tier = clamp(Math.floor(game.run.karma / 15), 0, 3);
+    if (tier <= 0) return;
+    const ctx = this.ctx, W = CONFIG.VIEW_W, H = CONFIG.VIEW_H;
+    const a = tier * 0.05;
+    const g = ctx.createRadialGradient(W / 2, H / 2, H * 0.32, W / 2, H / 2, H * 0.78);
+    g.addColorStop(0, 'rgba(0,0,0,0)');
+    g.addColorStop(1, `rgba(150,22,12,${a + 0.05})`);
+    ctx.save();
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = `rgba(120,16,10,${a * 0.45})`; ctx.fillRect(0, 0, W, H);
+    ctx.restore();
   },
 
   drawChannel(ch) {
@@ -603,6 +622,21 @@ const Render = {
     ctx.fillStyle = p.color;
     ctx.beginPath(); ctx.arc(s.x, s.y, p.r, 0, TAU); ctx.fill();
     ctx.globalAlpha = 1;
+  },
+
+  drawAoe(ctx, a) {
+    if (a.done) return;
+    const s = this.worldToScreen(a.x, a.y);
+    const fill = (1 - a.t / a.maxt);
+    ctx.save();
+    ctx.fillStyle = hexA(a.color, 0.12 + fill * 0.22);
+    ctx.beginPath(); ctx.arc(s.x, s.y, a.r, 0, TAU); ctx.fill();
+    ctx.strokeStyle = hexA(a.color, 0.5 + fill * 0.4); ctx.lineWidth = 2 + fill * 2;
+    ctx.beginPath(); ctx.arc(s.x, s.y, a.r, 0, TAU); ctx.stroke();
+    // 詠唱の充填
+    ctx.fillStyle = hexA(a.color, 0.28);
+    ctx.beginPath(); ctx.moveTo(s.x, s.y); ctx.arc(s.x, s.y, a.r, -Math.PI / 2, -Math.PI / 2 + TAU * fill); ctx.closePath(); ctx.fill();
+    ctx.restore();
   },
 
   drawFx(ctx, f) {
