@@ -62,6 +62,11 @@ const UI = {
   },
   panel(html) { this.root.style.display = 'flex'; this.root.innerHTML = html; },
 
+  gold(n) {
+    const u = (typeof Sprites !== 'undefined') ? Sprites.coinURL() : '';
+    return `<span class="gold-amt">${u ? `<img class="coin-i" src="${u}" alt="">` : ''}${fmt(n)}</span>`;
+  },
+
   rarityTag(it) {
     const r = RARITY[it.rarity];
     const url = (typeof Sprites !== 'undefined') ? Sprites.iconURL(it) : '';
@@ -129,7 +134,7 @@ const UI = {
     this.panel(`<div class="town">
       <div class="town-top">
         <div class="town-title">伽藍 ― <b style="color:${cls.color}">${cls.name}</b> <span class="lvl">Lv.${p.level}</span></div>
-        <div class="town-gold">${fmt(p.gold)} 文</div>
+        <div class="town-gold">${this.gold(p.gold)}</div>
       </div>
       <div class="town-nav">${nav.map(n => `<button class="tnav ${n === tab ? 'on' : ''}" data-t="${n}">${navName[n]}</button>`).join('')}</div>
       <div class="town-body">${body}</div>
@@ -163,8 +168,8 @@ const UI = {
 
   tabStatus(p, d, cls) {
     const xpNeed = xpForLevel(p.level);
-    const attrRows = ATTRS.map(a => `<div class="attr-row">
-        <div class="attr-info"><b>${a.name}</b><span class="ak">${a.key}</span><span class="ad">${a.desc}</span></div>
+    const attrRows = ATTRS.map(a => `<div class="attr-row" title="${a.desc}">
+        <div class="attr-info"><b>${a.name}</b><span class="ak">${a.key}</span></div>
         <div class="attr-val">${p.baseAttrs[a.key]}</div>
         <button class="btn sm plus" data-a="${a.key}" ${p.points <= 0 ? 'disabled' : ''}>＋</button>
       </div>`).join('');
@@ -175,7 +180,7 @@ const UI = {
       ['重量', `${d.weight.toFixed(1)} / ${Math.round(d.weightCap)}`],
       ['会心率', Math.round(d.crit * 100) + '%'], ['会心ダメージ', Math.round(d.critDmg * 100) + '%'],
       ['回避', Math.round(d.dodge * 100) + '%'], ['吸血', Math.round(d.lifesteal * 100) + '%'],
-      ['視界', d.hasTorch ? '広い(トーチ)' : '狭い'],
+      ['視界', d.hasTorch ? '広い' : '狭い'],
     ].map(r => `<div class="drow"><span>${r[0]}</span><b>${r[1]}</b></div>`).join('');
     const eqNames = Object.values(p.equipment).filter(Boolean).map(it => this.rarityTag(it)).join('、') || '—';
     return `<div class="cols">
@@ -190,21 +195,15 @@ const UI = {
           </div>
         </div>
         <div class="card">
-          <div class="lvbox">Lv.${p.level} <div class="xpbar"><div style="width:${Math.min(100, p.xp / xpNeed * 100)}%"></div></div><span>${p.xp}/${xpNeed} EXP</span></div>
-          <div class="points">未割り振りポイント：<b class="${p.points > 0 ? 'hot' : ''}">${p.points}</b></div>
-          ${attrRows}
+          <div class="lvbox">Lv.${p.level} <div class="xpbar"><div style="width:${Math.min(100, p.xp / xpNeed * 100)}%"></div></div><span>${p.xp}/${xpNeed}</span></div>
+          <div class="points">割り振りポイント：<b class="${p.points > 0 ? 'hot' : ''}">${p.points}</b></div>
+          <div class="attr-grid">${attrRows}</div>
         </div>
       </div>
       <div class="col">
-        <div class="card"><h3>派生ステータス</h3>${derivedRows}</div>
-        <div class="card"><h3>戦績</h3>
-          <div class="drow"><span>潜入回数</span><b>${p.runStats.runs}</b></div>
-          <div class="drow"><span>脱出成功</span><b>${p.runStats.extracts}</b></div>
-          <div class="drow"><span>死亡</span><b>${p.runStats.deaths}</b></div>
-          <div class="drow"><span>撃破数</span><b>${p.runStats.kills}</b></div>
-        </div>
+        <div class="card"><h3>派生ステータス</h3><div class="drow-grid">${derivedRows}</div></div>
         <div class="card"><h3>実績（${Object.keys(p.achievements || {}).length}/${Object.keys(ACHIEVEMENTS).length}）</h3>
-          ${Object.keys(ACHIEVEMENTS).map(id => { const a = ACHIEVEMENTS[id]; const got = p.achievements && p.achievements[id]; return `<div class="ach ${got ? 'got' : ''}"><b>${got ? '◆' : '◇'} ${a.name}</b><span>${a.desc}</span></div>`; }).join('')}
+          <div class="ach-chips">${Object.keys(ACHIEVEMENTS).map(id => { const a = ACHIEVEMENTS[id]; const got = p.achievements && p.achievements[id]; return `<span class="ach-chip ${got ? 'got' : ''}" title="${a.desc}">${got ? '◆' : '◇'} ${a.name}</span>`; }).join('')}</div>
         </div>
       </div>
     </div>`;
@@ -215,7 +214,7 @@ const UI = {
     const rows = p.bounties.map(b => {
       const pct = clamp(b.progress / b.target * 100, 0, 100);
       return `<div class="card" style="margin-bottom:8px">
-        <div class="brow"><b>${b.label}</b><span class="val">報酬 ${fmt(b.reward)}G</span></div>
+        <div class="brow"><b>${b.label}</b><span class="val">報酬 ${this.gold(b.reward)}</span></div>
         <div class="xpbar" style="margin:8px 0"><div style="width:${pct}%"></div></div>
         <div class="brow"><span class="muted">${Math.min(b.progress, b.target)} / ${b.target}</span>
           ${b.done && !b.claimed ? `<button class="btn sm claim" data-id="${b.id}">報酬を受け取る</button>` : b.claimed ? '<span class="muted">受取済</span>' : '<span class="muted">進行中…</span>'}</div>
@@ -251,8 +250,8 @@ const UI = {
       return `<div class="inv-row">
         <div>${this.rarityTag(it)} <span class="slot-tag">${where}</span><div class="eq-stat">${statLine(it.stats)}</div></div>
         <div class="inv-act">
-          ${upOk ? `<button class="btn sm upg ${p.gold >= upgradeCost(it) ? '' : 'poor'}" data-uid="${it.uid}">強化+${(it.upgrade || 0) + 1}（${fmt(upgradeCost(it))}G）</button>` : `<span class="muted">強化MAX</span>`}
-          ${enOk ? `<button class="btn sm ench ${p.gold >= enchantCost(it) ? '' : 'poor'}" data-uid="${it.uid}">エンチャント（${fmt(enchantCost(it))}G）</button>` : ''}
+          ${upOk ? `<button class="btn sm upg ${p.gold >= upgradeCost(it) ? '' : 'poor'}" data-uid="${it.uid}">強化+${(it.upgrade || 0) + 1}（${this.gold(upgradeCost(it))}）</button>` : `<span class="muted">強化MAX</span>`}
+          ${enOk ? `<button class="btn sm ench ${p.gold >= enchantCost(it) ? '' : 'poor'}" data-uid="${it.uid}">エンチャント（${this.gold(enchantCost(it))}）</button>` : ''}
         </div></div>`;
     }).join('');
     return `<div class="card"><h3>鍛冶屋 — 強化／エンチャント</h3>
@@ -293,7 +292,7 @@ const UI = {
       <div>${this.rarityTag(it)} <span class="slot-tag">${SLOT_NAMES[it.slot] || (it.slot === 'potion' ? 'ポーション' : '財宝')}</span>
         <div class="eq-stat">${it.potion ? (it.potion.hp ? 'HP+' + it.potion.hp : '') + (it.potion.mp ? ' MP+' + it.potion.mp : '') : statLine(it.stats)}</div></div>
       <div class="inv-act">
-        <span class="val">${fmt(Math.round(it.value * 0.6))}G</span>
+        <span class="val">${this.gold(Math.round(it.value * 0.6))}</span>
         ${['weapon', 'head', 'chest', 'hands', 'legs', 'ring', 'torch'].includes(it.slot) ? `<button class="btn sm equip" data-uid="${it.uid}">装備</button>` : ''}
         ${it.slot === 'potion' ? `<button class="btn sm topotion" data-uid="${it.uid}">枠へ</button>` : ''}
         <button class="btn sm danger sell" data-uid="${it.uid}">売却</button>
@@ -306,11 +305,11 @@ const UI = {
     const buy = this.shopStock.map(it => `<div class="inv-row">
       <div>${this.rarityTag(it)} <span class="slot-tag">${SLOT_NAMES[it.slot] || (it.slot === 'potion' ? 'ポーション' : '財宝')}</span>
         <div class="eq-stat">${it.potion ? (it.potion.hp ? 'HP+' + it.potion.hp : '') + (it.potion.mp ? ' MP+' + it.potion.mp : '') : statLine(it.stats)}</div></div>
-      <button class="btn sm buy" data-uid="${it.uid}">${fmt(this.buyPrice(it))}G 購入</button>
+      <button class="btn sm buy" data-uid="${it.uid}">${this.gold(this.buyPrice(it))} 購入</button>
     </div>`).join('');
     const sellList = p.stash.length ? p.stash.map(it => `<div class="inv-row">
       <div>${this.rarityTag(it)}</div>
-      <button class="btn sm danger sell" data-uid="${it.uid}">${fmt(Math.round(it.value * 0.6))}G 売却</button>
+      <button class="btn sm danger sell" data-uid="${it.uid}">${this.gold(Math.round(it.value * 0.6))} 売却</button>
     </div>`).join('') : '<div class="muted">売る物がありません</div>';
     return `<div class="cols">
       <div class="col"><div class="card"><h3>購入 <button class="btn sm refresh" style="float:right">入荷</button></h3>${buy}</div></div>
@@ -343,7 +342,7 @@ const UI = {
     if (!cv || !cv.getContext || typeof Sprites === 'undefined') return;
     const ctx = cv.getContext('2d'); ctx.imageSmoothingEnabled = false;
     ctx.clearRect(0, 0, cv.width, cv.height);
-    const spr = Sprites.player(CLASSES[classId].color);
+    const spr = Sprites.player(classId);
     const sc = Math.max(1, Math.floor(Math.min(cv.width / spr._w, cv.height / spr._h)));
     const w = spr._w * sc, h = spr._h * sc;
     ctx.drawImage(spr, Math.floor((cv.width - w) / 2), Math.floor((cv.height - h) / 2), w, h);
@@ -424,7 +423,7 @@ const UI = {
         p.gold += bt.reward;
         p.bounties[idx] = generateBounties()[0];
         Audio2.play && Audio2.play('coin');
-        this.toast('報酬 ' + fmt(bt.reward) + 'G を受け取った');
+        this.toast('報酬 ' + fmt(bt.reward) + ' を受け取った');
         reload();
       }
     }));
@@ -494,7 +493,11 @@ const UI = {
     if (ht) ht.textContent = `${Math.max(0, Math.round(p.hp))}/${Math.round(d.hpmax)}`;
     if (mt) mt.textContent = `${Math.round(p.mp)}/${Math.round(d.mpmax)}`;
     const info = document.getElementById('runinfo');
-    if (info) info.textContent = `${realmName(game.floor)}（${game.floor}）　撃破 ${game.run.kills}　戦利品 ${game.run.loot.length}　金 ${game.run.gold}`;
+    if (info) {
+      const cu = (typeof Sprites !== 'undefined') ? Sprites.coinURL() : '';
+      const html = `${realmName(game.floor)}　撃破 ${game.run.kills}　戦利品 ${game.run.loot.length}　${cu ? `<img class="coin-i" src="${cu}">` : '金'}${game.run.gold}`;
+      if (this._lastRun !== html) { info.innerHTML = html; this._lastRun = html; }
+    }
     const db = document.getElementById('dodgebtn');
     if (db) db.classList.toggle('cool', p.dodgeCd > 0);
     const ib = document.getElementById('interactbtn');
@@ -562,7 +565,7 @@ const UI = {
       <p class="subtitle">${win ? realmName(Game.floor) + 'より戦利品を持ち帰った。' : '持ち込んだ全てを失い、再び人間界へ還る。だが業（カルマ）は経験として残る。'}</p>
       <div class="res-stats">
         <div><span>撃破数</span><b>${data.kills}</b></div>
-        <div><span>獲得G</span><b>${win ? '+' + fmt(data.gold) : '0'}</b></div>
+        <div><span>獲得</span><b>${win ? '+' + this.gold(data.gold) : '0'}</b></div>
         <div><span>獲得EXP</span><b>+${data.xp}</b></div>
         ${data.leveled ? `<div><span>レベルUP</span><b class="hot">+${data.leveled}</b></div>` : ''}
       </div>

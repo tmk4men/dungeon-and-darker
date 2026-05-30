@@ -448,7 +448,7 @@ const Render = {
     ctx.beginPath(); ctx.ellipse(0, r * 0.5, r, r * 0.45, 0, 0, TAU); ctx.fill();
     ctx.save(); ctx.translate(an.lx, an.ly);
     this.facingMark(ctx, p.facing, r, col);
-    const topY = this.blitSprite(ctx, Sprites.player(col), r, an.bob);
+    this.blitSprite(ctx, Sprites.player(p.classId), r, an.bob);
     ctx.restore();
     this.drawBar(ctx, -r, (r * 0.5 - 38) - 7, r * 2, 4, p.hp / p.derived.hpmax, '#7ad17a', '#3a0e0e');
     ctx.restore();
@@ -523,7 +523,7 @@ const Render = {
     ctx.beginPath(); ctx.ellipse(0, r * 0.5, r, r * 0.45, 0, 0, TAU); ctx.fill();
     ctx.save(); ctx.translate(an.lx, an.ly);
     this.facingMark(ctx, e.facing, r, col);
-    if (hit) this.blitSprite(ctx, Sprites.flash('monk'), r, an.bob); else this.blitSprite(ctx, Sprites.player(col), r, an.bob);
+    if (hit) this.blitSprite(ctx, Sprites.flash(CLASS_SPRITE[e.rivalClass] || 'monk'), r, an.bob); else this.blitSprite(ctx, Sprites.player(e.rivalClass), r, an.bob);
     ctx.restore();
     const topY = -r * 2.2;
     this.drawBar(ctx, -r, topY - 8, r * 2, 5, e.hp / e.maxhp, '#ff7ad0', '#3a0e2a');

@@ -10,24 +10,26 @@ const Sprites = {
       '.': null,
       'O': '#140d07',
       'M': col,
-      'D': shade(col, -0.38),
+      'D': shade(col, -0.4),
       'H': shade(col, 0.34),
       'S': '#e8c79c', 's': '#c39a6e', 'E': '#1c120a',
       'A': '#d8b15a', 'a': '#9c7f38',
       'W': '#ece9dc', 'w': '#9a978a', 'f': '#b83038', 'G': '#fff3c0',
+      'k': '#2a2330', 'x': '#34303f', 'r': '#c23a2c', 'B': '#7fb2e8',
     };
   },
 
+  // 行幅は自動でパディング（最大幅に揃える）
   make(key, rows, col) {
     const ck = key + '|' + col;
     if (this.cache[ck]) return this.cache[ck];
     const pal = this.palette(col);
-    const h = rows.length, w = rows[0].length;
+    const w = Math.max(...rows.map(r => r.length)), h = rows.length;
     const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
     const c = cv.getContext('2d');
     for (let y = 0; y < h; y++) {
       const row = rows[y];
-      for (let x = 0; x < w; x++) {
+      for (let x = 0; x < row.length; x++) {
         const color = pal[row[x]];
         if (color) { c.fillStyle = color; c.fillRect(x, y, 1, 1); }
       }
@@ -37,7 +39,13 @@ const Sprites = {
     return cv;
   },
 
-  player(col) { return this.make('monk', SPR.monk, col); },
+  // 職業ごとのスプライト
+  player(classId) {
+    const cls = CLASSES[classId];
+    if (!cls) return this.make('monk', SPR.monk, classId || '#d9c27a');
+    const tmpl = CLASS_SPRITE[classId] || 'monk';
+    return this.make(tmpl, SPR[tmpl], cls.color);
+  },
 
   enemy(type) {
     const def = ENEMIES[type];
@@ -96,6 +104,12 @@ const Sprites = {
     this.cache[ck] = res; return res;
   },
   iconCanvas(item) { return this.makeIcon(iconKey(item)); },
+  coinURL() {
+    if (this._coinURL !== undefined) return this._coinURL;
+    const cv = this.makeIcon('coin'); let u = '';
+    try { if (cv.toDataURL) u = cv.toDataURL(); } catch (e) { u = ''; }
+    this._coinURL = u; return u;
+  },
   iconURL(item) {
     const key = iconKey(item), ck = 'url|' + key;
     this._urls = this._urls || {};
@@ -312,6 +326,127 @@ function iconKey(it) {
   if (it.slot === 'treasure') { if (it.baseId === 'tr_crown') return 'crown'; if (it.baseId === 'tr_gem') return 'gem'; return 'coin'; }
   return 'coin';
 }
+
+// --- 職業別スプライト（頭部・装束で描き分け） ---
+const CLASS_SPRITE = { fighter: 'c_fighter', barbarian: 'c_barb', ranger: 'c_ranger', rogue: 'c_rogue', cleric: 'c_cleric', mage: 'c_mage' };
+Object.assign(SPR, {
+  // 武僧：剃髪・数珠・袈裟
+  c_fighter: [
+    '......OOOO......',
+    '.....OSSSSO.....',
+    '.....OSssSO.....',
+    '.....sSEsES.....',
+    '.....OSssSO.....',
+    '......OOOO......',
+    '....OMMHHMMO....',
+    '...OMMMMMMMMO...',
+    '...OAMAMAMAMO...',
+    '...OMMMMMMMMO...',
+    '...OAAAAAAAAO...',
+    '..OMMMMDDMMMMO..',
+    '..OMHMMDDMMMMO..',
+    '..OMMMMDDMMMMO..',
+    '..OMMMMDDMMMMO..',
+    '..ODDDDDDDDDDO..',
+    '...OO....OO.....',
+  ],
+  // 金剛：髻・上半身裸・赤褌
+  c_barb: [
+    '.......kk.......',
+    '......OkkO......',
+    '.....OSSSSO.....',
+    '.....SSEEsS.....',
+    '.....OSssSO.....',
+    '......OOOO......',
+    '...OSSMMMMSSO...',
+    '..OSSSMMMMSSSO..',
+    '..OSSSMMMMSSSO..',
+    '..OSAAAAAAAASO..',
+    '..OSSMMMMMMSSO..',
+    '..OSSMMMMMMSSO..',
+    '..OSSDDDDDDSSO..',
+    '...OSSO..OSSO...',
+    '...OSSO..OSSO...',
+    '...OOOO..OOOO...',
+  ],
+  // 修験者：頭襟＋兜巾（ずきん）
+  c_ranger: [
+    '......OAO.......',
+    '.....OkkkkO.....',
+    '....OkSSSSkO....',
+    '....kSEsEsk.....',
+    '....OkSSSSk.....',
+    '.....OOOOO......',
+    '...OMMMMMMMO....',
+    '..OMMHMMMMMMO...',
+    '..OMMMMMMMMMO...',
+    '..OAAAAAAAAAO...',
+    '..OMMMMMMMMMO...',
+    '.OMMMMDDMMMMMO..',
+    '.OMHMMDDMMMMMO..',
+    '..OMMMMMMMMMO...',
+    '..ODDDDDDDDO....',
+    '..OO....OO......',
+  ],
+  // 夜叉：頭巾＋覆面・双眸が光る
+  c_rogue: [
+    '.....OOOOO.....',
+    '....OxxxxxO....',
+    '...OxSSSSSxO...',
+    '...xSrEErSx....',
+    '...OxxxxxxxO...',
+    '....OOOOOOO....',
+    '...OMMMMMMMO...',
+    '..OMxMMMMxMMO..',
+    '..OMMMMMMMMMO..',
+    '..OAAAAAAAO....',
+    '..OMMMMMMMMMO..',
+    '.OMMMMDDMMMMMO.',
+    '.OMxMMDDMMxMMO.',
+    '..OMMMMMMMMMO..',
+    '..ODDDDDDDDO...',
+    '..OO....OO.....',
+  ],
+  // 法師：網代笠・白い袈裟襷
+  c_cleric: [
+    '...OOOOOOOO....',
+    '..OAAAAAAAAO...',
+    '..OaAAAAAAaO...',
+    '...kSSSSSSk....',
+    '...kSEsEsSk....',
+    '....OSSSSO.....',
+    '...OMMMMMMMO...',
+    '..OMMHMMMMMMO..',
+    '..OWWWWWWWWWO..',
+    '..OMMMMMMMMMO..',
+    '..OAAAAAAAAAO..',
+    '.OMMMMDDMMMMMO.',
+    '.OMMHMDDMMMMMO.',
+    '..OMMMMMMMMMO..',
+    '..ODDDDDDDDDO..',
+    '...OO....OO....',
+  ],
+  // 陰陽師：立烏帽子・水干の広袖
+  c_mage: [
+    '......Okkk......',
+    '......Okkk......',
+    '.....OkkkO.....',
+    '.....OSSSSO....',
+    '.....SSEsES....',
+    '.....OSssSO....',
+    '......OOOO.....',
+    '...OMMMMMMMO...',
+    '..OMMHMMMMMMO..',
+    '.OMMMMMMMMMMMO.',
+    '.OMAAAAAAAAMMO.',
+    'OMMMMMMMMMMMMMO',
+    'OMMMDDDDDDMMMMO',
+    '.OMMMMMMMMMMMO.',
+    '..OMMMMMMMMMO..',
+    '..ODDDDDDDDDO..',
+    '...OO....OO....',
+  ],
+});
 
 // 敵タイプ → スプライト種別
 const ENEMY_SPRITE = {
