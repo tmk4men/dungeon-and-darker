@@ -184,6 +184,36 @@ const UNIQUE_AFFIXES = [
   { name: '【幸運】', stats: { LUCK: 6 } },
 ];
 
+// --- 実績 ---
+const ACHIEVEMENTS = {
+  first_extract: { name: '生還者', desc: '初めてダンジョンから脱出する' },
+  boss_slayer: { name: 'ボスキラー', desc: 'ボスを討伐する' },
+  legendary: { name: '伝説の発見', desc: 'レジェンダリ装備を入手する' },
+  lvl10: { name: '熟練者', desc: 'レベル10に到達する' },
+  rich: { name: '富豪', desc: '所持ゴールド1000以上' },
+  elite10: { name: 'エリートハンター', desc: 'エリートを通算10体討伐' },
+  deep: { name: '深層探索者', desc: '第3層に到達する' },
+  rival_slayer: { name: '果たし合い', desc: 'ライバル冒険者を討伐する' },
+};
+
+// --- 依頼（バウンティ）生成 ---
+function generateBounties() {
+  const pool = [
+    () => ({ type: 'kills', target: randInt(15, 30), desc: '敵を{n}体討伐する', reward: 130 }),
+    () => ({ type: 'extract', target: randInt(2, 4), desc: '{n}回 脱出に成功する', reward: 160 }),
+    () => ({ type: 'boss', target: 1, desc: 'ボスを討伐する', reward: 220 }),
+    () => ({ type: 'floor', target: 3, desc: '第3層に到達する', reward: 190 }),
+    () => ({ type: 'rarity', target: 1, desc: 'レア以上の装備を持ち帰る', reward: 170 }),
+    () => ({ type: 'elite', target: randInt(3, 6), desc: 'エリートを{n}体討伐する', reward: 180 }),
+    () => ({ type: 'rival', target: 1, desc: 'ライバル冒険者を討伐する', reward: 240 }),
+  ];
+  return shuffle(pool.slice()).slice(0, 3).map(f => {
+    const b = f(); b.progress = 0; b.done = false; b.claimed = false; b.id = uid();
+    b.label = b.desc.replace('{n}', b.target);
+    return b;
+  });
+}
+
 // --- エリート修飾子 ---
 const ELITE_MODS = [
   { name: '迅速の', color: '#7fe0ff', hp: 1.2, atk: 1.0, speed: 1.45, size: 0.95 },
@@ -212,4 +242,6 @@ const ENEMIES = {
   lich:       { name: '【ボス】リッチ王', hp: 360, atk: 22, def: 8, speed: 70, r: 22, behavior: 'ranged', range: 520, sight: 700, projSpeed: 380, color: '#caa6ff', xp: 160, undead: true, boss: true, gold: [120, 240] },
   ogre:       { name: '【ボス】オーガ', hp: 480, atk: 28, def: 10, speed: 84, r: 26, behavior: 'melee', range: 70, sight: 600, color: '#a05a3a', xp: 180, boss: true, gold: [140, 280] },
   necromancer:{ name: '【ボス】ネクロマンサー', hp: 420, atk: 20, def: 7, speed: 66, r: 22, behavior: 'ranged', range: 500, sight: 720, projSpeed: 360, color: '#7d5bd6', xp: 200, undead: true, boss: true, summon: true, gold: [150, 300] },
+  // ライバル冒険者（PvPvE風味：徘徊し、敵と戦い戦利品を奪い合う）
+  rival:      { name: 'ライバル冒険者', hp: 130, atk: 17, def: 6, speed: 122, r: 14, behavior: 'rival', range: 380, sight: 520, projSpeed: 560, color: '#d0d0d0', xp: 90, rival: true, gold: [30, 70] },
 };

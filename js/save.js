@@ -15,7 +15,9 @@ function newProfile(classId) {
     equipment: { weapon: null, head: null, chest: null, hands: null, legs: null, ring: null, torch: null },
     potions: new Array(CONFIG.POTION_SLOTS).fill(null),
     stash: [],
-    runStats: { runs: 0, extracts: 0, deaths: 0, kills: 0, gold: 0 },
+    runStats: { runs: 0, extracts: 0, deaths: 0, kills: 0, gold: 0, elites: 0 },
+    achievements: {},
+    bounties: [],
   };
   // 初期装備：職業の標準武器＋トーチ＋ポーション
   const wmap = { sword: 'w_sword', hammer: 'w_hammer', dagger: 'w_dagger', mace: 'w_mace', bow: 'w_bow', staff: 'w_staff', spear: 'w_spear', tome: 'w_tome', flail: 'w_flail' };
@@ -53,15 +55,22 @@ function computeDerived(p) {
   const weapon = p.equipment.weapon;
   const wtype = weapon ? WEAPON_TYPES[weapon.wtype] : WEAPON_TYPES[cls.weapon];
 
+  // 重量 → 移動速度。STRで許容重量が増え、超過すると減速。
+  const weight = sumWeight(p.equipment);
+  const weightCap = 14 + attr.STR * 0.9;
+  const over = Math.max(0, weight - weightCap);
+  const encPenalty = clamp(over * 0.04, 0, 0.55);
+
   const d = {
     attr,
     wtype, weaponItem: weapon,
+    weight, weightCap, encPenalty, encumbered: over > 0,
     hpmax: Math.round(60 + attr.VIG * 8 + (equip.hpmax || 0)),
     mpmax: Math.round(30 + attr.WILL * 4 + attr.WIS * 2 + (equip.mpmax || 0)),
     patkFlat: (equip.patk || 0),
     matkFlat: (equip.matk || 0),
     defense: Math.round(attr.VIG * 0.3 + (equip.defense || 0)),
-    speed: 158 * (1 + attr.AGI * 0.02),
+    speed: 158 * (1 + attr.AGI * 0.02) * (1 - encPenalty),
     atkSpeedMult: 1 / (1 + attr.AGI * 0.022),
     crit: clamp((wtype.crit || 0) + attr.DEX * 0.004 + attr.LUCK * 0.003 + (equip.crit || 0), 0, 0.75),
     critDmg: 1.5 + attr.LUCK * 0.02,

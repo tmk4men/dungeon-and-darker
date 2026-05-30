@@ -119,6 +119,21 @@ function randomLoot(floor, luck, opts = {}) {
   return createItem(base.id, rollRarity(luck, floor));
 }
 
+// --- 重量 ---
+const WEIGHT_WEAPON = { dagger: 3, bow: 3.5, staff: 3, tome: 3.5, sword: 5, spear: 5.5, mace: 6, flail: 8, hammer: 9 };
+const WEIGHT_BASE = { a_hood: 2, a_robe: 2, a_tunic: 3.5, a_helm: 5, a_plate: 10, a_gloves: 2.5, a_greaves: 4, r_ring: 0.5, r_amulet: 0.5, t_torch: 1 };
+function itemWeight(it) {
+  if (!it) return 0;
+  if (it.slot === 'weapon') return WEIGHT_WEAPON[it.wtype] || 4;
+  if (WEIGHT_BASE[it.baseId] != null) return WEIGHT_BASE[it.baseId];
+  return ({ head: 3, chest: 5, hands: 2, legs: 3, ring: 0.5, torch: 1 })[it.slot] || 1;
+}
+function sumWeight(equipment) {
+  let w = 0;
+  for (const s in equipment) w += itemWeight(equipment[s]);
+  return w;
+}
+
 // 装備セットから派生ステータス補正を合算
 function sumEquipStats(equipment) {
   const sum = {};

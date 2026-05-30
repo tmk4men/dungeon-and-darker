@@ -43,6 +43,15 @@ const Game = {
   goTown() {
     this.state = 'town';
     Input.enabled = false; Input.reset();
+    // 旧セーブの移行
+    if (!this.profile.achievements) this.profile.achievements = {};
+    if (!this.profile.bounties) this.profile.bounties = [];
+    if (!this.profile.runStats.elites) this.profile.runStats.elites = 0;
+    if (!this.profile.loadout) this.profile.loadout = [...CLASSES[this.profile.classId].skills];
+    if (this.profile.bounties.length < 3) {
+      const need = 3 - this.profile.bounties.length;
+      this.profile.bounties.push(...generateBounties().slice(0, need));
+    }
     this.derived = computeDerived(this.profile);
     saveProfile(this.profile);
     UI.showTown();
@@ -74,6 +83,8 @@ const Game = {
     this.groundItems = this.dgn.groundItems.slice();
     this.chests = this.dgn.chests.slice();
     this.traps = this.dgn.traps.slice();
+    this.altars = this.dgn.altars.slice();
+    this.nearAltar = null;
     this.initZone();
     Audio2.init();
 
@@ -97,8 +108,16 @@ const Game = {
       hitFlash: 0, dead: false, slowT: 0, slowMul: 1, dotT: 0, dotDmg: 0, knockX: 0, knockY: 0,
       stunT: 0, summonCd: rand(4, 7), windT: 0, windMax: 0, pending: null, elite: null, regenT: 0,
     };
-    // エリート抽選（ボス以外）
-    if (!def.boss && (forceElite || Math.random() < 0.1 + this.floor * 0.025)) {
+    // ライバル冒険者：ランダムな職業を割り当て
+    if (def.rival) {
+      e.rival = true;
+      e.rivalClass = choice(Object.keys(CLASSES));
+      const cls = CLASSES[e.rivalClass];
+      e.weaponKind = cls.weapon;
+      e.color = cls.color;
+    }
+    // エリート抽選（ボス・ライバル以外）
+    if (!def.boss && !def.rival && (forceElite || Math.random() < 0.1 + this.floor * 0.025)) {
       const mod = choice(ELITE_MODS);
       e.elite = mod;
       e.maxhp = Math.round(e.maxhp * mod.hp); e.hp = e.maxhp;
@@ -181,6 +200,7 @@ const Game = {
     if (this.playerRoom && !this.playerRoom.revealed) this.playerRoom.revealed = true;
     this.updatePickups();
     this.updatePortal(dt);
+    this.updateAltars();
     this.updateTraps(dt);
     this.runTime += dt;
     this.updateZone(dt);
@@ -209,6 +229,7 @@ const Game = {
     if (k['shift']) { this.dodge(); }
     if (k['q']) { this.usePotion(0); k['q'] = false; }
     if (k['e']) { this.usePotion(1); k['e'] = false; }
+    if (k['f']) { this.interact(); k['f'] = false; }
     // スペース or 左クリックでマウス方向に発射
     if (k[' ']) { k[' '] = false; const ang = angleOf(Input.mouse.x - CONFIG.VIEW_W / 2, Input.mouse.y - CONFIG.VIEW_H / 2); this.player.facing = ang; this.onFire(ang); }
   },
@@ -228,11 +249,13 @@ const Game = {
     this.normalAttack(ang);
   },
 
+  buffMul(stat) { let m = 1; for (const b of this.player.buffs) if (b.stat === stat) m *= b.mult; return m; },
+
   normalAttack(ang) {
     const p = this.player, d = p.derived, wt = d.wtype;
     if (p.attackCd > 0) return;
     p.attackCd = wt.speed * d.atkSpeedMult;
-    const power = attackPower(d, wt.scaling);
+    const power = attackPower(d, wt.scaling) * this.buffMul(wt.kind === 'magic' ? 'matk' : 'patk');
     if (wt.kind === 'melee') {
       this.meleeSwing(p.x, p.y, ang, wt.range, wt.arc, power, { crit: d.crit, critDmg: d.critDmg, knock: wt.knock || 0, color: wt.color });
       Audio2.play('swing');
@@ -252,7 +275,7 @@ const Game = {
     if (p.skillCd[slot] > 0) { this.toast('クールダウン中'); return false; }
     if (p.mp < s.mp) { this.toast('MPが足りない'); return false; }
     p.mp -= s.mp; p.skillCd[slot] = s.cd;
-    const power = s.scaling ? attackPower(d, s.scaling) * s.dmg : 0;
+    const power = s.scaling ? attackPower(d, s.scaling) * s.dmg * this.buffMul(s.scaling === 'WILL' ? 'matk' : 'patk') : 0;
     const opt = { crit: d.crit, critDmg: d.critDmg, color: s.color, holy: s.holy, dot: s.dot, slow: s.slow, knock: s.knock || 0, lifesteal: s.lifesteal, stun: s.stun };
     Audio2.play(s.kind === 'heal' ? 'heal' : s.kind === 'buff' ? 'potion' : 'magic');
 
@@ -401,17 +424,27 @@ const Game = {
     this.hitStop = Math.max(this.hitStop, def.boss ? 0.12 : 0.04);
     this.addShake(def.boss ? 16 : (e.elite ? 7 : 3));
     this.run.kills++;
+    // 実績・依頼
+    this.progressBounty('kills', 1);
+    if (def.boss) { this.unlockAch('boss_slayer'); this.progressBounty('boss', 1); }
+    if (e.rival) { this.unlockAch('rival_slayer'); this.progressBounty('rival', 1); }
+    if (e.elite) {
+      this.profile.runStats.elites = (this.profile.runStats.elites || 0) + 1;
+      if (this.profile.runStats.elites >= 10) this.unlockAch('elite10');
+      this.progressBounty('elite', 1);
+    }
     // ゴールド
     let g = randInt(def.gold[0], def.gold[1]);
     if (e.elite) g = Math.round(g * 2.2);
+    if (e.rival) g = Math.round(g * 1.5) + 20;
     this.run.gold += g;
     // ドロップ
-    const dropChance = def.boss ? 1 : (e.elite ? 1 : 0.4);
+    const dropChance = def.boss ? 1 : (e.elite || e.rival ? 1 : 0.4);
     if (Math.random() < dropChance) {
-      const n = def.boss ? 3 : (e.elite ? 2 : 1);
-      const luckBonus = (def.boss ? 8 : e.elite ? 5 : 0);
+      const n = def.boss ? 3 : (e.rival ? 3 : e.elite ? 2 : 1);
+      const luckBonus = (def.boss ? 8 : e.rival ? 6 : e.elite ? 5 : 0);
       for (let i = 0; i < n; i++) {
-        this.groundItems.push({ x: e.x + rand(-14, 14), y: e.y + rand(-14, 14), item: randomLoot(this.floor + (e.elite ? 1 : 0), this.derived.attr.LUCK + luckBonus) });
+        this.groundItems.push({ x: e.x + rand(-14, 14), y: e.y + rand(-14, 14), item: randomLoot(this.floor + (e.elite || e.rival ? 1 : 0), this.derived.attr.LUCK + luckBonus) });
       }
     }
     // スライム分裂
@@ -473,6 +506,9 @@ const Game = {
     // スタン中は行動不能
     if (e.stunT > 0) { e.stunT -= dt; return; }
 
+    // ライバル冒険者
+    if (def.behavior === 'rival') { this.updateRival(e, def, dt, spd); return; }
+
     // 予備動作中：溜め切ったら攻撃実行（この間は動かない＝回避のチャンス）
     if (e.windT > 0) {
       e.windT -= dt;
@@ -528,6 +564,75 @@ const Game = {
 
   startWindup(e, def, time) {
     e.windT = time; e.windMax = time;
+  },
+
+  // ライバル冒険者AI：敵と戦い、プレイヤーが近いと襲う
+  updateRival(e, def, dt, spd) {
+    const p = this.player;
+    let target = null, isPlayer = false;
+    const ddp = dist(e.x, e.y, p.x, p.y);
+    if (!p.dead && ddp < def.sight && this.hasLoS(e.x, e.y, p.x, p.y)) { target = p; isPlayer = true; }
+    else {
+      let best = 440;
+      for (const m of this.enemies) {
+        if (m === e || m.dead || m.type === 'rival') continue;
+        const d = dist(e.x, e.y, m.x, m.y);
+        if (d < best) { best = d; target = m; }
+      }
+    }
+    if (!target) {
+      e.wanderT -= dt;
+      if (e.wanderT <= 0) { e.wanderT = rand(0.6, 1.6); e.wanderAng = rand(0, TAU); e.moving = chance(0.7); }
+      if (e.moving) { this.moveEnemy(e, e.wanderAng, spd * 0.5, dt); e.facing = e.wanderAng; }
+      return;
+    }
+    e.facing = angleOf(target.x - e.x, target.y - e.y);
+    const wk = WEAPON_TYPES[e.weaponKind] || WEAPON_TYPES.sword;
+    const rng = wk.kind === 'melee' ? 58 : 360;
+    const d2 = dist(e.x, e.y, target.x, target.y);
+    const tr = isPlayer ? CONFIG.PLAYER_R : (target.r || 14);
+    if (d2 > rng) this.moveEnemy(e, e.facing, spd, dt);
+    else if (wk.kind !== 'melee' && d2 < rng * 0.5) this.moveEnemy(e, e.facing + Math.PI, spd * 0.7, dt);
+    if (e.atkCd <= 0 && d2 < rng + tr + 8) {
+      e.atkCd = 0.9;
+      if (wk.kind === 'melee') {
+        if (isPlayer) { this.hurtPlayer(e.atk, false); this.burst(p.x, p.y, '#ff8a6a', 6); }
+        else this.rivalHitMonster(target, e.atk);
+        Audio2.play('swing');
+      } else {
+        if (isPlayer) this.spawnProjectile('enemy', e.x, e.y, e.facing, { speed: wk.projSpeed || 520, dmg: e.atk, r: 8, color: e.color, life: 2 });
+        else this.rivalHitMonster(target, e.atk);
+        Audio2.play(wk.kind === 'magic' ? 'magic' : 'shoot');
+      }
+    }
+  },
+
+  rivalHitMonster(m, dmg) {
+    const d = Math.max(1, Math.round(mitigate(dmg, m.def)));
+    m.hp -= d; m.hitFlash = 0.1;
+    this.addFloat(m.x, m.y - m.r, '' + d, '#bfbfbf', 11);
+    if (m.hp <= 0 && !m.dead) { m.dead = true; m.deathT = 0; this.burst(m.x, m.y, ENEMIES[m.type].color, 12); }
+  },
+
+  // 実績・依頼
+  unlockAch(id) {
+    const p = this.profile;
+    if (!p.achievements) p.achievements = {};
+    if (p.achievements[id]) return;
+    p.achievements[id] = true;
+    p.gold += 50;
+    this.toast('🏆 実績解除：' + ACHIEVEMENTS[id].name + '（+50G）');
+    Audio2.play('levelup');
+    saveProfile(p);
+  },
+  progressBounty(type, amt, setMax) {
+    const p = this.profile;
+    if (!p.bounties) return;
+    for (const b of p.bounties) {
+      if (b.type !== type || b.done) continue;
+      if (setMax) b.progress = Math.max(b.progress, amt); else b.progress += amt;
+      if (b.progress >= b.target) { b.done = true; this.toast('📜 依頼達成：' + b.label + '（拠点で報酬受取）'); }
+    }
   },
 
   executeAttack(e, def) {
@@ -633,23 +738,78 @@ const Game = {
           for (let s = 0; s < p.potions.length; s++) if (!p.potions[s]) { p.potions[s] = g.item; placed = true; UI.buildSkillBar(this); break; }
         }
         if (!placed) this.run.loot.push(g.item);
+        if (g.item.rarity === 'legendary') this.unlockAch('legendary');
         const col = RARITY[g.item.rarity] ? RARITY[g.item.rarity].color : '#fff';
         this.addFloat(g.x, g.y - 14, itemDisplayName(g.item), col, 13);
+        Audio2.play(RARITY_ORDER.indexOf(g.item.rarity) >= 3 ? 'coin' : 'ui');
         this.groundItems.splice(i, 1);
       }
     }
   },
 
   updatePortal(dt) {
-    const p = this.player, portal = this.dgn.portal;
-    const near = dist(p.x, p.y, portal.x, portal.y) < portal.r + CONFIG.PLAYER_R;
-    if (near) {
+    const p = this.player;
+    let active = null;
+    for (const portal of this.dgn.portals) {
+      portal.open = this.runTime >= portal.openAt;
+      if (portal.open && dist(p.x, p.y, portal.x, portal.y) < portal.r + CONFIG.PLAYER_R) { active = portal; break; }
+    }
+    if (active) {
       this.extractT += dt;
-      UI.showExtract(clamp(this.extractT / 2.2, 0, 1));
-      if (this.extractT >= 2.2) this.extract();
+      UI.showExtract(clamp(this.extractT / 2.2, 0, 1), active.bonus);
+      if (this.extractT >= 2.2) this.extract(active);
     } else {
       if (this.extractT > 0) UI.showExtract(0);
       this.extractT = 0;
+    }
+  },
+
+  // 祭壇/聖域の相互作用判定（近接時）
+  updateAltars() {
+    const p = this.player;
+    this.nearAltar = null;
+    for (const a of this.altars) {
+      if (a.used) continue;
+      if (dist(p.x, p.y, a.x, a.y) < a.r + CONFIG.PLAYER_R + 8) { this.nearAltar = a; break; }
+    }
+  },
+
+  interact() {
+    const a = this.nearAltar;
+    if (!a || a.used) return;
+    const p = this.player;
+    if (a.type === 'sacrifice') {
+      const cost = Math.floor(p.hp * 0.25);
+      if (p.hp - cost < 1) { this.toast('HPが足りない（生贄に捧げられない）'); return; }
+      p.hp -= cost;
+      a.used = true;
+      this.addFloat(p.x, p.y - 30, '-' + cost + ' HP', '#ff6a5a', 16);
+      this.burst(a.x, a.y, '#ff5b6e', 24);
+      for (let i = 0; i < 3; i++) this.groundItems.push({ x: a.x + rand(-26, 26), y: a.y + rand(-26, 26), item: randomLoot(this.floor + 1, this.derived.attr.LUCK + 6) });
+      this.toast('生贄の祭壇：戦利品が現れた！');
+      Audio2.play('chest');
+    } else {
+      a.used = true;
+      this.burst(a.x, a.y, '#9fd0ff', 24);
+      if (Math.random() < 0.65) {
+        const boon = choice([
+          { stat: 'patk', mult: 1.3, name: '攻撃力上昇' },
+          { stat: 'defense', mult: 1.4, name: '防御力上昇' },
+          { stat: 'speed', mult: 1.3, name: '移動速度上昇' },
+          { stat: 'matk', mult: 1.3, name: '魔力上昇' },
+        ]);
+        p.buffs.push({ stat: boon.stat, mult: boon.mult, t: 600 });
+        this.toast('聖域の恩恵：' + boon.name + '（この探索の間）');
+        Audio2.play('levelup');
+      } else {
+        const curse = choice([
+          { stat: 'patk', mult: 0.8, name: '攻撃力低下' },
+          { stat: 'defense', mult: 0.75, name: '防御力低下' },
+        ]);
+        p.buffs.push({ stat: curse.stat, mult: curse.mult, t: 90 });
+        this.toast('呪い…：' + curse.name + '（しばらく）');
+        Audio2.play('zone');
+      }
     }
   },
 
@@ -753,9 +913,16 @@ const Game = {
     UI.showResult(false, { kills: this.run.kills, gold: 0, xp, lost, loot: this.run.loot });
   },
 
-  extract() {
+  extract(portal) {
     this.state = 'result';
     Input.enabled = false;
+    // 報酬ポータルはボーナス（ゴールド＋戦利品）
+    if (portal && portal.bonus) {
+      this.run.gold = Math.round(this.run.gold * 1.6 + 40);
+      const extra = randomLoot(this.floor + 1, this.derived.attr.LUCK + 8);
+      this.run.loot.push(extra);
+      this.toast('報酬ポータルで脱出！ボーナス獲得');
+    }
     // 取得品をストレージへ、ゴールド加算
     for (const it of this.run.loot) this.profile.stash.push(it);
     this.profile.gold += this.run.gold;
@@ -763,6 +930,15 @@ const Game = {
     this.profile.potions = this.player.potions.map(x => x || null);
     const xp = Math.round(this.run.kills * 10 + this.floor * 25 + this.run.loot.length * 5);
     const leveled = grantXP(this.profile, xp);
+    // 実績・依頼
+    this.unlockAch('first_extract');
+    if (this.floor >= 3) this.unlockAch('deep');
+    if (this.profile.gold >= 1000) this.unlockAch('rich');
+    if (this.profile.level >= 10) this.unlockAch('lvl10');
+    if (this.run.loot.some(it => it.rarity === 'legendary')) this.unlockAch('legendary');
+    this.progressBounty('extract', 1);
+    this.progressBounty('floor', this.floor, true);
+    if (this.run.loot.some(it => RARITY_ORDER.indexOf(it.rarity) >= 3)) this.progressBounty('rarity', 1);
     this.profile.runStats.extracts++;
     this.profile.runStats.runs++;
     this.profile.runStats.kills += this.run.kills;

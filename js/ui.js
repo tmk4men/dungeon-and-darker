@@ -83,8 +83,8 @@ const UI = {
     const p = Game.profile, d = computeDerived(p);
     Game.derived = d;
     const cls = CLASSES[p.classId];
-    const nav = ['status', 'skill', 'equip', 'forge', 'stash', 'shop', 'deploy'];
-    const navName = { status: '⚔ ステータス', skill: '✨ スキル', equip: '🛡 装備', forge: '🔨 鍛冶', stash: '🎒 倉庫', shop: '💰 ショップ', deploy: '🚪 出撃' };
+    const nav = ['status', 'skill', 'equip', 'forge', 'stash', 'shop', 'bounty', 'deploy'];
+    const navName = { status: '⚔ ステータス', skill: '✨ スキル', equip: '🛡 装備', forge: '🔨 鍛冶', stash: '🎒 倉庫', shop: '💰 ショップ', bounty: '📜 依頼', deploy: '🚪 出撃' };
     let body = '';
     if (tab === 'status') body = this.tabStatus(p, d, cls);
     else if (tab === 'skill') body = this.tabSkill(p, d);
@@ -92,6 +92,7 @@ const UI = {
     else if (tab === 'forge') body = this.tabForge(p, d);
     else if (tab === 'stash') body = this.tabStash(p, d);
     else if (tab === 'shop') body = this.tabShop(p, d);
+    else if (tab === 'bounty') body = this.tabBounty(p, d);
     else if (tab === 'deploy') body = this.tabDeploy(p, d);
 
     this.panel(`<div class="town">
@@ -116,7 +117,8 @@ const UI = {
     const derivedRows = [
       ['最大HP', Math.round(d.hpmax)], ['最大MP', Math.round(d.mpmax)],
       ['物理攻撃力', d.wtype.base + d.patkFlat], ['魔法攻撃力', d.wtype.base + d.matkFlat],
-      ['防御', d.defense], ['移動速度', Math.round(d.speed)],
+      ['防御', d.defense], ['移動速度', Math.round(d.speed) + (d.encumbered ? ' ⚠重量超過' : '')],
+      ['重量', `${d.weight.toFixed(1)} / ${Math.round(d.weightCap)}`],
       ['会心率', Math.round(d.crit * 100) + '%'], ['会心ダメージ', Math.round(d.critDmg * 100) + '%'],
       ['回避', Math.round(d.dodge * 100) + '%'], ['吸血', Math.round(d.lifesteal * 100) + '%'],
       ['視界', d.hasTorch ? '広い(トーチ)' : '狭い'],
@@ -137,8 +139,25 @@ const UI = {
           <div class="drow"><span>死亡</span><b>${p.runStats.deaths}</b></div>
           <div class="drow"><span>撃破数</span><b>${p.runStats.kills}</b></div>
         </div>
+        <div class="card"><h3>実績（${Object.keys(p.achievements || {}).length}/${Object.keys(ACHIEVEMENTS).length}）</h3>
+          ${Object.keys(ACHIEVEMENTS).map(id => { const a = ACHIEVEMENTS[id]; const got = p.achievements && p.achievements[id]; return `<div class="ach ${got ? 'got' : ''}"><b>${got ? '🏆' : '🔒'} ${a.name}</b><span>${a.desc}</span></div>`; }).join('')}
+        </div>
       </div>
     </div>`;
+  },
+
+  tabBounty(p, d) {
+    if (!p.bounties) p.bounties = [];
+    const rows = p.bounties.map(b => {
+      const pct = clamp(b.progress / b.target * 100, 0, 100);
+      return `<div class="card" style="margin-bottom:8px">
+        <div class="brow"><b>${b.label}</b><span class="val">報酬 ${fmt(b.reward)}G</span></div>
+        <div class="xpbar" style="margin:8px 0"><div style="width:${pct}%"></div></div>
+        <div class="brow"><span class="muted">${Math.min(b.progress, b.target)} / ${b.target}</span>
+          ${b.done && !b.claimed ? `<button class="btn sm claim" data-id="${b.id}">🎁 報酬を受け取る</button>` : b.claimed ? '<span class="muted">受取済</span>' : '<span class="muted">進行中…</span>'}</div>
+      </div>`;
+    }).join('');
+    return `<div class="card"><h3>📜 依頼ボード</h3><p class="muted">ダンジョンでの成果は自動で記録されます。達成した依頼の報酬を受け取ると、新しい依頼に切り替わります。</p></div>${rows}`;
   },
 
   tabSkill(p, d) {
@@ -317,6 +336,20 @@ const UI = {
       if (p.gold < cost) { this.toast('ゴールドが足りない'); return; }
       if (enchantItem(it)) { p.gold -= cost; Audio2.play && Audio2.play('levelup'); reload(); }
     }));
+    // 依頼の報酬受取（達成済→受取で新しい依頼に差し替え）
+    this.root.querySelectorAll('.claim').forEach(b => b.addEventListener('click', () => {
+      const id = +b.dataset.id;
+      const idx = p.bounties.findIndex(x => x.id === id);
+      if (idx < 0) return;
+      const bt = p.bounties[idx];
+      if (bt.done && !bt.claimed) {
+        p.gold += bt.reward;
+        p.bounties[idx] = generateBounties()[0];
+        Audio2.play && Audio2.play('coin');
+        this.toast('報酬 ' + fmt(bt.reward) + 'G を受け取った');
+        reload();
+      }
+    }));
     // 出撃
     this.root.querySelectorAll('.depth').forEach(b => b.addEventListener('click', () => { this.hideAll(); Game.enterDungeon(+b.dataset.f); }));
   },
@@ -385,6 +418,11 @@ const UI = {
     if (info) info.textContent = `第${game.floor}層　撃破 ${game.run.kills}　戦利品 ${game.run.loot.length}　💰${game.run.gold}`;
     const db = document.getElementById('dodgebtn');
     if (db) db.classList.toggle('cool', p.dodgeCd > 0);
+    const ib = document.getElementById('interactbtn');
+    if (ib) {
+      if (game.nearAltar) { ib.style.display = 'block'; ib.textContent = (game.nearAltar.type === 'sacrifice' ? '🩸 捧げる' : '🔮 祈る'); }
+      else ib.style.display = 'none';
+    }
     const zi = document.getElementById('zoneinfo');
     if (zi && game.zone) {
       const t = game.runTime, z = game.zone;
@@ -409,12 +447,12 @@ const UI = {
     }
   },
 
-  showExtract(prog) {
+  showExtract(prog, bonus) {
     const el = document.getElementById('extract');
     if (!el) return;
     if (prog <= 0) { el.style.display = 'none'; return; }
     el.style.display = 'block';
-    el.innerHTML = `<div class="exlabel">脱出中…</div><div class="exbar"><div style="width:${prog * 100}%"></div></div>`;
+    el.innerHTML = `<div class="exlabel">${bonus ? '★ 報酬ポータルで脱出中…' : '脱出中…'}</div><div class="exbar"><div style="width:${prog * 100}%;${bonus ? 'background:linear-gradient(90deg,#ffce6b,#fff0c8)' : ''}"></div></div>`;
   },
 
   flashDamage() {

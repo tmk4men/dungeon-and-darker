@@ -3,6 +3,20 @@
 // ============================================================
 const T_WALL = 0, T_FLOOR = 1, T_DOOR = 2, T_DOOROPEN = 3;
 
+// バイオーム（見た目テーマ）
+const THEMES = {
+  crypt:   { name: '古城の地下', floorA: '#26242c', floorB: '#2c2a33', wallTop: '#4a4754', wallTopHi: '#54515f', wallFaceA: '#3a3742', wallFaceB: '#1c1a22', lightCol: '#ffae5b' },
+  cave:    { name: '洞窟', floorA: '#2a2620', floorB: '#302b22', wallTop: '#4a4038', wallTopHi: '#564a40', wallFaceA: '#3a3026', wallFaceB: '#1e1812', lightCol: '#ffcf7a' },
+  inferno: { name: '溶岩窟', floorA: '#2c1e1e', floorB: '#321f1f', wallTop: '#4e3232', wallTopHi: '#5e3a3a', wallFaceA: '#402424', wallFaceB: '#221212', lightCol: '#ff7a3c' },
+  ice:     { name: '氷窟', floorA: '#222a30', floorB: '#26303a', wallTop: '#46545f', wallTopHi: '#536470', wallFaceA: '#36424c', wallFaceB: '#161e24', lightCol: '#9fd8ff' },
+};
+function pickTheme(floor) {
+  if (floor === 1) return 'crypt';
+  if (floor === 2) return choice(['cave', 'ice']);
+  if (floor === 3) return 'inferno';
+  return choice(Object.keys(THEMES));
+}
+
 function genDungeon(floor, derived) {
   const cols = 4, rows = 3;
   const cellW = 17, cellH = 15;
@@ -94,15 +108,22 @@ function genDungeon(floor, derived) {
     }
   }
 
-  // --- 出撃地点（最初の部屋）と脱出ポータル（最も遠い部屋） ---
+  // --- 出撃地点と複数の脱出ポータル ---
   const start = rooms[0];
   start.revealed = true;
-  let portalRoom = rooms[0], best = -1;
-  for (const r of rooms) {
-    const d = Math.abs(r.cx - start.cx) + Math.abs(r.cy - start.cy);
-    if (d > best) { best = d; portalRoom = r; }
+  const distOf = r => Math.abs(r.cx - start.cx) + Math.abs(r.cy - start.cy);
+  const sorted = rooms.filter(r => r !== start).sort((a, b) => distOf(b) - distOf(a));
+  const mainRoom = sorted[0];
+  const bonusRoom = sorted.find(r => r !== mainRoom) || mainRoom;
+  const portals = [
+    { x: (mainRoom.ccx + 0.5) * CONFIG.TILE, y: (mainRoom.ccy + 0.5) * CONFIG.TILE, r: 30, room: mainRoom, bonus: false, openAt: 0, id: 0 },
+  ];
+  if (bonusRoom !== mainRoom) {
+    portals.push({ x: (bonusRoom.ccx + 0.5) * CONFIG.TILE, y: (bonusRoom.ccy + 0.5) * CONFIG.TILE, r: 30, room: bonusRoom, bonus: true, openAt: 22, id: 1 });
   }
-  const portal = { x: (portalRoom.ccx + 0.5) * CONFIG.TILE, y: (portalRoom.ccy + 0.5) * CONFIG.TILE, r: 30, room: portalRoom };
+  const portal = portals[0]; // ゾーン中心などの互換用（安全な脱出口）
+  const portalRoom = mainRoom;
+  const bossRoom = (bonusRoom !== mainRoom) ? bonusRoom : mainRoom; // ボスは報酬ポータルを守る
 
   // --- 湧き：敵・宝箱・地上アイテム ---
   const enemySpawns = [];
@@ -114,8 +135,8 @@ function genDungeon(floor, derived) {
     if (r === start) continue;
     // 敵
     let count = randInt(0, 1 + Math.min(floor, 3));
-    if (r === portalRoom && floor >= 2) {
-      // ボス部屋
+    if (r === bossRoom && floor >= 2) {
+      // ボス部屋（報酬ポータルを守る）
       const bossPool = floor >= 3 ? ['ogre', 'necromancer', 'lich'] : ['lich', 'necromancer'];
       enemySpawns.push({ type: choice(bossPool), x: (r.ccx + 0.5) * CONFIG.TILE, y: (r.ccy + 0.5) * CONFIG.TILE });
       count = Math.max(0, count - 2);
@@ -167,8 +188,23 @@ function genDungeon(floor, derived) {
     }
   }
 
+  // --- 特殊部屋：祭壇（生贄）と聖域（恩恵ガチャ） ---
+  const altars = [];
+  const altarRooms = shuffle(rooms.filter(r => r !== start && r !== mainRoom && r !== bossRoom));
+  if (altarRooms[0]) altars.push({ type: 'sacrifice', x: (altarRooms[0].ccx + 0.5) * CONFIG.TILE, y: (altarRooms[0].ccy + 0.5) * CONFIG.TILE, used: false, r: 24 });
+  if (altarRooms[1]) altars.push({ type: 'shrine', x: (altarRooms[1].ccx + 0.5) * CONFIG.TILE, y: (altarRooms[1].ccy + 0.5) * CONFIG.TILE, used: false, r: 24 });
+
+  // --- ライバル冒険者（PvPvE風味） ---
+  if (chance(0.6)) {
+    const cand = shuffle(rooms.filter(r => r !== start && r !== bossRoom));
+    if (cand[0]) enemySpawns.push({ type: 'rival', x: (cand[0].ccx + 0.5) * CONFIG.TILE, y: (cand[0].ccy + 0.5) * CONFIG.TILE });
+  }
+
+  const themeKey = pickTheme(floor);
+  const theme = THEMES[themeKey];
+
   return {
-    floor, W, H, tiles, rooms, lights, portal, traps,
+    floor, W, H, tiles, rooms, lights, portal, portals, traps, altars, theme, themeKey,
     get, set,
     startX: (start.ccx + 0.5) * CONFIG.TILE,
     startY: (start.ccy + 0.5) * CONFIG.TILE,

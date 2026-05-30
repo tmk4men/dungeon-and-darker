@@ -39,6 +39,7 @@ const Render = {
   // ---- メイン描画 ----
   render(game) {
     const ctx = this.ctx, dgn = game.dgn, T = CONFIG.TILE;
+    this.theme = dgn.theme || THEMES.crypt;
     this.updateCamera(game.player, dgn);
     // 画面シェイク
     if (game.shake && game.shake.t > 0) {
@@ -60,7 +61,7 @@ const Render = {
         if (t === T_WALL) continue;
         const s = this.worldToScreen(tx * T, ty * T);
         const even = (tx + ty) & 1;
-        ctx.fillStyle = even ? '#26242c' : '#2c2a33';
+        ctx.fillStyle = even ? this.theme.floorA : this.theme.floorB;
         ctx.fillRect(s.x, s.y, T + 1, T + 1);
         // 目地
         ctx.fillStyle = 'rgba(0,0,0,0.18)';
@@ -70,8 +71,11 @@ const Render = {
       }
     }
 
-    // --- ポータル（脱出口） ---
-    this.drawPortal(ctx, game);
+    // --- ポータル（脱出口・複数） ---
+    for (const portal of game.dgn.portals) this.drawPortal(ctx, game, portal);
+
+    // --- 祭壇/聖域 ---
+    if (game.altars) for (const a of game.altars) this.drawAltar(ctx, a, game);
 
     // --- トラップ ---
     if (game.traps) for (const tr of game.traps) this.drawTrap(ctx, tr);
@@ -93,7 +97,7 @@ const Render = {
     for (const e of game.enemies) if (!e.dead) ents.push(e);
     ents.push(game.player);
     ents.sort((a, b) => a.y - b.y);
-    for (const e of ents) (e === game.player) ? this.drawPlayer(ctx, e) : this.drawEnemy(ctx, e);
+    for (const e of ents) (e === game.player) ? this.drawPlayer(ctx, e) : this.drawEnemy(ctx, e, game);
 
     // --- 投射物・パーティクル ---
     for (const p of game.projectiles) this.drawProjectile(ctx, p);
@@ -107,6 +111,9 @@ const Render = {
 
     // --- ゾーン収縮（闇の侵食）を最前面に ---
     if (game.zone) this.drawZone(game);
+
+    // --- ミニマップ ---
+    this.drawMinimap(game);
   },
 
   drawTrap(ctx, tr) {
@@ -171,18 +178,19 @@ const Render = {
       ctx.fillStyle = 'rgba(0,0,0,0.35)';
       ctx.fillRect(s.x - 2, s.y + T - 2, T + 4, 6);
     }
+    const th = this.theme;
     // 前面
     if (belowOpen) {
       const g = ctx.createLinearGradient(0, topY + T, 0, s.y + T);
-      g.addColorStop(0, '#3a3742');
-      g.addColorStop(1, '#1c1a22');
+      g.addColorStop(0, th.wallFaceA);
+      g.addColorStop(1, th.wallFaceB);
       ctx.fillStyle = g;
       ctx.fillRect(s.x, topY + T, T + 1, H + 1);
     }
     // 上面
-    ctx.fillStyle = '#4a4754';
+    ctx.fillStyle = th.wallTop;
     ctx.fillRect(s.x, topY, T + 1, T + 1);
-    ctx.fillStyle = '#54515f';
+    ctx.fillStyle = th.wallTopHi;
     ctx.fillRect(s.x + 2, topY + 2, T - 3, T - 3);
     // 上面の溝
     ctx.fillStyle = 'rgba(0,0,0,0.22)';
@@ -205,24 +213,61 @@ const Render = {
     }
   },
 
-  drawPortal(ctx, game) {
-    const s = this.worldToScreen(game.dgn.portal.x, game.dgn.portal.y);
+  drawPortal(ctx, game, portal) {
+    const s = this.worldToScreen(portal.x, portal.y);
     const t = game.time;
-    const R = game.dgn.portal.r;
+    const R = portal.r;
+    const open = game.runTime >= portal.openAt;
+    const col = portal.bonus ? '#ffcf6b' : '#7fd0ff';
+    const edge = portal.bonus ? '#ffe7a8' : '#aee7ff';
     ctx.save();
     ctx.translate(s.x, s.y);
-    for (let i = 3; i >= 0; i--) {
-      const rr = R * (0.5 + i * 0.22) + Math.sin(t * 3 + i) * 3;
-      ctx.fillStyle = hexA('#7fd0ff', 0.12 + i * 0.05);
-      ctx.beginPath(); ctx.arc(0, 0, rr, 0, TAU); ctx.fill();
+    if (open) {
+      for (let i = 3; i >= 0; i--) {
+        const rr = R * (0.5 + i * 0.22) + Math.sin(t * 3 + i) * 3;
+        ctx.fillStyle = hexA(col, 0.12 + i * 0.05);
+        ctx.beginPath(); ctx.arc(0, 0, rr, 0, TAU); ctx.fill();
+      }
+      ctx.strokeStyle = hexA(edge, 0.85);
+      ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(0, 0, R * 0.7, t % TAU, t % TAU + 5); ctx.stroke();
+      ctx.fillStyle = portal.bonus ? '#fff0c8' : '#eaffff';
+      ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText(portal.bonus ? '★報酬の脱出' : '脱出', 0, -R - 6);
+    } else {
+      // 未開放：暗くロック表示＋カウントダウン
+      ctx.fillStyle = hexA(col, 0.12);
+      ctx.beginPath(); ctx.arc(0, 0, R * 0.6, 0, TAU); ctx.fill();
+      ctx.strokeStyle = hexA('#888', 0.5); ctx.lineWidth = 2; ctx.setLineDash([5, 5]);
+      ctx.beginPath(); ctx.arc(0, 0, R * 0.6, 0, TAU); ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle = '#cfcfd6'; ctx.font = 'bold 11px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText('🔒 ' + Math.ceil(portal.openAt - game.runTime) + 's', 0, -R - 4);
     }
-    ctx.strokeStyle = hexA('#aee7ff', 0.8);
-    ctx.lineWidth = 3;
-    ctx.beginPath(); ctx.arc(0, 0, R * 0.7, t % TAU, t % TAU + 5); ctx.stroke();
-    ctx.fillStyle = '#eaffff';
-    ctx.font = 'bold 12px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('脱出', 0, -R - 6);
+    ctx.restore();
+  },
+
+  drawAltar(ctx, a, game) {
+    const s = this.worldToScreen(a.x, a.y);
+    const t = game.time;
+    ctx.save(); ctx.translate(s.x, s.y);
+    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    ctx.beginPath(); ctx.ellipse(0, 12, 22, 8, 0, 0, TAU); ctx.fill();
+    const col = a.type === 'sacrifice' ? '#c43b5e' : '#7fb0ff';
+    // 台座
+    ctx.fillStyle = a.used ? '#3a3640' : '#4a4654';
+    ctx.fillRect(-16, -6, 32, 18);
+    ctx.fillStyle = a.used ? '#2a2730' : '#565260';
+    ctx.fillRect(-12, -16, 24, 12);
+    if (!a.used) {
+      const gl = 0.5 + Math.sin(t * 3) * 0.3;
+      ctx.fillStyle = hexA(col, 0.2 * gl);
+      ctx.beginPath(); ctx.arc(0, -14, 22, 0, TAU); ctx.fill();
+      ctx.fillStyle = col;
+      ctx.font = '16px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText(a.type === 'sacrifice' ? '🩸' : '🔮', 0, -9);
+      ctx.fillStyle = hexA(col, 0.9); ctx.font = 'bold 10px sans-serif';
+      ctx.fillText(a.type === 'sacrifice' ? '生贄の祭壇' : '聖域', 0, -26);
+    }
     ctx.restore();
   },
 
@@ -294,7 +339,8 @@ const Render = {
     ctx.restore();
   },
 
-  drawEnemy(ctx, e) {
+  drawEnemy(ctx, e, game) {
+    if (e.type === 'rival') return this.drawRival(ctx, e);
     const def = ENEMIES[e.type];
     const s = this.worldToScreen(e.x, e.y);
     const r = e.r;
@@ -355,6 +401,63 @@ const Render = {
       ctx.fillStyle = e.elite.color; ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'center';
       ctx.fillText(e.elite.name + def.name, 0, by - r - 11);
     }
+    ctx.restore();
+  },
+
+  drawRival(ctx, e) {
+    const s = this.worldToScreen(e.x, e.y);
+    const r = e.r, col = e.color || '#ddd';
+    ctx.save(); ctx.translate(s.x, s.y);
+    ctx.fillStyle = 'rgba(0,0,0,0.4)';
+    ctx.beginPath(); ctx.ellipse(0, r * 0.7, r, r * 0.5, 0, 0, TAU); ctx.fill();
+    const by = -8, hit = e.hitFlash > 0;
+    ctx.rotate(e.facing);
+    ctx.fillStyle = hexA(col, 0.9);
+    ctx.beginPath(); ctx.moveTo(r + 8, 0); ctx.lineTo(r - 2, -7); ctx.lineTo(r - 2, 7); ctx.closePath(); ctx.fill();
+    ctx.rotate(-e.facing);
+    ctx.fillStyle = hit ? '#fff' : shade(col, -0.15);
+    ctx.beginPath(); ctx.arc(0, by, r, 0, TAU); ctx.fill();
+    ctx.fillStyle = hit ? '#fff' : shade(col, 0.2);
+    ctx.beginPath(); ctx.arc(0, by - 2, r - 4, 0, TAU); ctx.fill();
+    ctx.fillStyle = '#f2d6b3';
+    ctx.beginPath(); ctx.arc(0, by - 3, r - 6, 0, TAU); ctx.fill();
+    this.drawBar(ctx, -r, by - r - 8, r * 2, 5, e.hp / e.maxhp, '#ff7ad0', '#3a0e2a');
+    ctx.fillStyle = '#ff9fe0'; ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('⚔ ライバル冒険者', 0, by - r - 12);
+    ctx.restore();
+  },
+
+  drawMinimap(game) {
+    const dgn = game.dgn, ctx = this.ctx, T = CONFIG.TILE;
+    const pad = 12, mw = 148, mh = Math.round(mw * dgn.pxH / dgn.pxW);
+    const x0 = CONFIG.VIEW_W - mw - pad, y0 = 56;
+    const sx = mw / dgn.pxW, sy = mh / dgn.pxH;
+    ctx.save();
+    ctx.fillStyle = 'rgba(8,8,14,0.72)'; ctx.fillRect(x0 - 4, y0 - 4, mw + 8, mh + 8);
+    ctx.strokeStyle = 'rgba(255,206,107,0.4)'; ctx.lineWidth = 1; ctx.strokeRect(x0 - 4, y0 - 4, mw + 8, mh + 8);
+    for (const r of dgn.rooms) {
+      if (!r.revealed) continue;
+      ctx.fillStyle = 'rgba(120,120,142,0.55)';
+      ctx.fillRect(x0 + r.x * T * sx, y0 + r.y * T * sy, r.w * T * sx, r.h * T * sy);
+    }
+    for (const p of dgn.portals) {
+      const open = game.runTime >= p.openAt;
+      ctx.fillStyle = p.bonus ? (open ? '#ffce6b' : 'rgba(255,206,107,0.4)') : (open ? '#7fd0ff' : 'rgba(127,208,255,0.4)');
+      ctx.beginPath(); ctx.arc(x0 + p.x * sx, y0 + p.y * sy, 3, 0, TAU); ctx.fill();
+    }
+    for (const a of (game.altars || [])) {
+      if (a.used) continue;
+      ctx.fillStyle = a.type === 'sacrifice' ? '#c43b5e' : '#7fb0ff';
+      ctx.beginPath(); ctx.arc(x0 + a.x * sx, y0 + a.y * sy, 2, 0, TAU); ctx.fill();
+    }
+    // ライバル
+    for (const e of game.enemies) {
+      if (e.dead || e.type !== 'rival') continue;
+      if (!roomAt(dgn, e.x, e.y) || !roomAt(dgn, e.x, e.y).revealed) continue;
+      ctx.fillStyle = '#ff7ad0'; ctx.beginPath(); ctx.arc(x0 + e.x * sx, y0 + e.y * sy, 2.5, 0, TAU); ctx.fill();
+    }
+    const pl = game.player;
+    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(x0 + pl.x * sx, y0 + pl.y * sy, 2.6, 0, TAU); ctx.fill();
     ctx.restore();
   },
 

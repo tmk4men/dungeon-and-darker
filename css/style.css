@@ -108,6 +108,13 @@ button { font-family: inherit; cursor: pointer; color: var(--ink); }
 .cmp.up { color: #6fe08a; } .cmp.down { color: #ff7a6a; } .cmp.new { color: var(--gold); } .cmp { color: var(--muted); }
 .btn.poor { color: #b06a6a; border-color: #4a2a2a; }
 
+/* achievements & bounties */
+.ach { display: flex; flex-direction: column; padding: 6px 0; border-bottom: 1px solid #20202c; opacity: .5; }
+.ach.got { opacity: 1; }
+.ach b { font-size: 13px; } .ach.got b { color: var(--gold); }
+.ach span { font-size: 11px; color: var(--muted); }
+.brow { display: flex; justify-content: space-between; align-items: center; }
+
 /* result */
 .result { max-width: 640px; }
 .res-title { font-size: 40px; font-weight: 900; margin-bottom: 4px; }
@@ -166,6 +173,11 @@ button { font-family: inherit; cursor: pointer; color: var(--ink); }
 .dodgebtn span { font-size: 8px; color: #7f9fd0; letter-spacing: 1px; }
 .dodgebtn.cool { opacity: .4; }
 .dodgebtn:active { transform: translateX(-50%) scale(.92); }
+
+.interactbtn { position: absolute; bottom: calc(max(18px, env(safe-area-inset-bottom)) + 86px); left: 50%; transform: translateX(-50%);
+  display: none; background: rgba(40,30,55,.9); border: 2px solid #9b7bff; color: #e6d8ff; border-radius: 22px;
+  padding: 10px 18px; font-size: 14px; font-weight: 800; pointer-events: auto; box-shadow: 0 0 16px rgba(150,110,255,.4);
+  animation: zonePulse 1.2s ease-in-out infinite; }
 
 .hint { position: absolute; bottom: 16px; font-size: 11px; color: rgba(255,255,255,.25); pointer-events: none; }
 .left-hint { left: 18%; } .right-hint { left: 50%; transform: translateX(-50%); bottom: 6px; }
