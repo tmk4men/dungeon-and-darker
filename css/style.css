@@ -402,11 +402,12 @@ button { font-family: inherit; cursor: pointer; color: var(--ink); }
 /* 闇の侵食タイマー：通常は左カラム（HP/MPの下）に左寄せ。HP/MPバーと衝突させない */
 #zoneinfo { position: absolute; top: calc(max(10px, env(safe-area-inset-top)) + 66px); left: max(64px, calc(env(safe-area-inset-left) + 58px)); text-align: left;
   font-family: var(--f-head); font-size: 12px; font-weight: 600; letter-spacing: .5px; color: #c79bff; text-shadow: 0 1px 5px #000; pointer-events: none; white-space: nowrap; transition: top .2s var(--ease), left .2s var(--ease); }
-/* 侵食開始＝最重要警告。中央へ昇格し赤朱の札で大きく（HP/MPの下に来るよう少し下げる） */
-.zoneinfo.warn { top: calc(max(10px, env(safe-area-inset-top)) + 62px); left: 50%; transform: translateX(-50%); text-align: center;
-  font-size: clamp(15px, 3.2vmin, 20px); letter-spacing: 3px; color: #ffe2da;
+/* 侵食開始＝最重要警告。中央へ昇格し赤朱の札で大きく（HP/MPの下に来るよう少し下げる）。
+   id+class で #zoneinfo の left を確実に上書き（はみ出し防止） */
+#zoneinfo.warn { top: calc(max(10px, env(safe-area-inset-top)) + 104px); left: 50%; right: auto; transform: translateX(-50%); text-align: center;
+  white-space: normal; max-width: 86vw; font-size: clamp(14px, 3.1vmin, 20px); letter-spacing: 2px; color: #ffe2da;
   background: linear-gradient(180deg, rgba(120,22,18,.95), rgba(70,12,10,.95)); border: 1px solid var(--vermilion); border-radius: 4px;
-  padding: 7px 18px; box-shadow: 0 0 24px rgba(200,64,47,.5), inset 0 1px 0 rgba(255,220,150,.15);
+  padding: 7px 16px; box-shadow: 0 0 24px rgba(200,64,47,.5), inset 0 1px 0 rgba(255,220,150,.15);
   animation: zonePulse .8s ease-in-out infinite; }
 .karmainfo { position: absolute; top: calc(max(10px, env(safe-area-inset-top)) + 88px); left: max(64px, calc(env(safe-area-inset-left) + 58px));
   display: none; font-family: var(--f-head); font-size: 11px; font-weight: 600; letter-spacing: .3px; color: #ff7a5a; text-shadow: 0 1px 4px #000; pointer-events: none; max-width: min(58vw, 280px); line-height: 1.5; }
