@@ -152,13 +152,13 @@ const Game = {
 
   // 現在の深度でレベルを生成（プレイヤー状態は維持）
   buildLevel() {
-    // デイリーは固定シードで地形・配置を再現（戦闘の乱数は通常通り）
+    // デイリーは固定シードで地形・敵配置・エリート化・宝の中身を再現（戦闘中の乱数は通常通り）
     if (this.daily) seedRng((this.dailySeed + this.floor * 101) >>> 0);
     this.dgn = genDungeon(this.floor, this.derived);
-    if (this.daily) unseedRng();
     this.projectiles = []; this.particles = []; this.floatTexts = []; this.fx = []; this.aoes = []; this.extractT = 0;
     this.runTime = 0;
     this.enemies = this.dgn.enemySpawns.map(sp => this.makeEnemy(sp.type, sp.x, sp.y));
+    if (this.daily) unseedRng();
     this.groundItems = this.dgn.groundItems.slice();
     this.chests = this.dgn.chests.slice();
     this.traps = this.dgn.traps.slice();
@@ -185,11 +185,14 @@ const Game = {
 
   makeEnemy(type, x, y, forceElite) {
     const def = ENEMIES[type];
-    const sc = 1 + (this.floor - 1) * 0.20 + (this.profile.rebirths || 0) * REBIRTH.enemyScale;
+    const base = 1 + (this.floor - 1) * 0.20;
+    const rb = this.profile.rebirths || 0;
+    const hpSc = base + rb * 0.15;   // 転生でHP +15%/回
+    const atkSc = base + rb * 0.10;  // 転生でATK +10%/回（序盤の即死を緩和）
     const e = {
       type, x, y, vx: 0, vy: 0, facing: rand(0, TAU),
-      maxhp: Math.round(def.hp * sc), hp: Math.round(def.hp * sc),
-      atk: def.atk * sc, def: def.def, speed: def.speed,
+      maxhp: Math.round(def.hp * hpSc), hp: Math.round(def.hp * hpSc),
+      atk: def.atk * atkSc, def: def.def, speed: def.speed,
       r: def.r, state: 'idle', atkCd: rand(0, 1), wanderT: 0, wanderAng: rand(0, TAU),
       hitFlash: 0, dead: false, slowT: 0, slowMul: 1, dotT: 0, dotDmg: 0, knockX: 0, knockY: 0,
       stunT: 0, summonCd: rand(4, 7), windT: 0, windMax: 0, pending: null, elite: null, regenT: 0,
@@ -204,7 +207,7 @@ const Game = {
       e.color = cls.color;
     }
     // エリート抽選（ボス・ライバル以外）
-    if (!def.boss && !def.rival && (forceElite || Math.random() < 0.12 + this.floor * 0.03)) {
+    if (!def.boss && !def.rival && (forceElite || chance(0.12 + this.floor * 0.03))) {
       const mod = choice(ELITE_MODS);
       e.elite = mod;
       e.maxhp = Math.round(e.maxhp * mod.hp); e.hp = e.maxhp;
@@ -283,6 +286,7 @@ const Game = {
     p.dodgeCd = Math.max(0, p.dodgeCd - dt);
     p.attackT = Math.max(0, (p.attackT || 0) - dt);
     for (let i = 0; i < p.skillCd.length; i++) p.skillCd[i] = Math.max(0, p.skillCd[i] - dt);
+    if (p._mpHitT) p._mpHitT = Math.max(0, p._mpHitT - dt);
     p.mp = Math.min(d.mpmax, p.mp + d.mpregen * dt);
 
     // キーボード操作（スキル選択・ポーション・発射）
@@ -363,13 +367,15 @@ const Game = {
 
   buffMul(stat) { let m = 1; for (const b of this.player.buffs) if (b.stat === stat) m *= b.mult; return m; },
   karmaTier() { return this.run ? clamp(Math.floor(this.run.karma / 15), 0, 3) : 0; },
+  // 業の被ダメ増（連続：業5ごとに+4%、上限+32%）
+  karmaPenalty() { return this.run ? clamp(this.run.karma, 0, 40) / 5 * 0.04 : 0; },
 
   normalAttack(ang) {
     const p = this.player, d = p.derived, wt = d.wtype;
     if (p.attackCd > 0) return;
     p.attackCd = wt.speed * d.atkSpeedMult;
     p.attackT = 0.18;
-    const wkey = (d.weaponItem && d.weaponItem.wtype) || CLASSES[p.classId].weapon; // 武器の型
+    const wkey = (d.weaponItem && d.weaponItem.wtype) || null; // 武器の型（素手は型なし）
     const power = attackPower(d, wt.scaling) * this.buffMul(wt.kind === 'magic' ? 'matk' : 'patk');
     if (wt.kind === 'melee') {
       this.meleeSwing(p.x, p.y, ang, wt.range, wt.arc, power, { crit: d.crit, critDmg: d.critDmg, knock: wt.knock || 0, color: wt.color, weaponKind: wkey });
@@ -514,7 +520,7 @@ const Game = {
       defUsed = e.def * 0.6;
       if (!def.boss && chance(0.14)) e.stunT = Math.max(e.stunT, 0.7);
     } else if (wk === 'sword') { critDmgMul = 1.12; }
-    else if (wk === 'bow') { if (dist(this.player.x, this.player.y, e.x, e.y) > 320) critChance += 0.25; }
+    else if (wk === 'bow') { if (dist(this.player.x, this.player.y, e.x, e.y) > 360) critChance += 0.15; }
     // 状態シナジー（全攻撃に適用）
     if (e.slowT > 0) dmg *= 1.30;  // 砕き
     if (e.stunT > 0) dmg *= 1.20;  // 急所
@@ -524,8 +530,11 @@ const Game = {
     dmg = Math.max(1, Math.round(dmg));
     e.hp -= dmg;
     e.hitFlash = 0.12;
-    // 賢者の理：魔法武器は命中でMP回復
-    if ((wk === 'staff' || wk === 'tome') && this.player.mp < this.player.derived.mpmax) this.player.mp = Math.min(this.player.derived.mpmax, this.player.mp + 3);
+    // 賢者の理：魔法武器は命中でMP回復（0.25秒に1回まで＝多段で壊れない）
+    if ((wk === 'staff' || wk === 'tome') && (this.player._mpHitT || 0) <= 0 && this.player.mp < this.player.derived.mpmax) {
+      this.player.mp = Math.min(this.player.derived.mpmax, this.player.mp + 3);
+      this.player._mpHitT = 0.25;
+    }
     // 誘爆：継続ダメージ中の敵に会心 → 残りを爆発で即時消費（周囲も巻き込む）
     if (crit && e.dotT > 0) {
       const burst = Math.max(2, Math.round(e.dotDmg * 3));
@@ -561,8 +570,8 @@ const Game = {
     this.hitStop = Math.max(this.hitStop, def.boss ? 0.12 : 0.04);
     this.addShake(def.boss ? 16 : (e.elite ? 7 : 3));
     this.run.kills++;
-    // 業（カルマ）：殺生で蓄積。戒の徳で蓄積を抑える
-    this.run.karma += (def.boss ? 10 : (e.elite ? 3 : 1)) * (1 - virtueLv(this.profile, 'restraint') * 0.20);
+    // 業（カルマ）：殺生で蓄積。戒の徳で蓄積を抑える（解脱を狙えるよう全体に控えめ）
+    this.run.karma += (def.boss ? 6 : (e.elite ? 2 : 1)) * (1 - virtueLv(this.profile, 'restraint') * 0.20);
     // 実績・依頼
     this.progressBounty('kills', 1);
     if (def.boss) { this.unlockAch('boss_slayer'); this.progressBounty('boss', 1); }
@@ -606,7 +615,7 @@ const Game = {
     const p = this.player, d = p.derived;
     if (p.dead || p.invuln > 0) return;
     if (Math.random() < d.dodge) { this.addFloat(p.x, p.y - 24, '回避', '#aef', 14); p.invuln = 0.15; return; }
-    let dmg = amount * (1 + this.karmaTier() * 0.12); // 業が深いほど獄卒が強くなる
+    let dmg = amount * (1 + this.karmaPenalty()); // 業が深いほど獄卒が強くなる（連続）
     dmg *= (1 - (d.damageReduce || 0));               // 忍の徳
     if (magic) dmg *= (1 - d.magicResist);
     let defense = d.defense;
@@ -914,6 +923,13 @@ const Game = {
     if (!this.interactHeld) { this.channel = null; return; }
     if (!this.channel || this.channel.key !== target.key) this.channel = { key: target.key, prog: 0, time: target.time, kind: target.kind, label: target.label };
     this.channel.x = target.x; this.channel.y = target.y;
+    // 秘宝庫の封を破ると近隣の敵が起きる（高リスク報酬）
+    if (target.kind === 'chest' && target.obj && target.obj.vault && !target.obj._alerted) {
+      target.obj._alerted = true;
+      let woke = 0;
+      for (const e of this.enemies) if (!e.dead && dist(target.x, target.y, e.x, e.y) < 300) { e.state = 'chase'; woke++; }
+      if (woke) this.toast('秘宝庫の封を破る — 守護が目覚める');
+    }
     this.channel.prog += dt / this.channel.time;
     if (this.channel.prog >= 1) {
       if (target.kind === 'chest') this.openChest(target.obj);
@@ -934,17 +950,14 @@ const Game = {
     c.opened = true;
     Audio2.play('chest');
     this.burst(c.x, c.y, c.vault ? '#fff0c0' : '#ffd27a', c.vault ? 32 : 18);
-    c.contents = [];
+    // 中身は生成時に確定済み（preroll）。無ければその場で生成
+    c.contents = (c.preroll && c.preroll.length) ? c.preroll.slice() : (() => { const a = []; for (let i = 0; i < c.loot; i++) a.push(randomLoot(this.floor + (c.vault ? 2 : 0), this.derived.attr.LUCK + (c.vault ? 12 : 0))); return a; })();
+    c.preroll = null;
     if (c.vault) {
-      const lk = this.derived.attr.LUCK + 12 + this.karmaTier() * 2;
-      for (let i = 0; i < c.loot; i++) c.contents.push(randomLoot(this.floor + 2, lk));
       this.run.gold += randInt(40, 90) + this.floor * 10;
       this.spawnRing(c.x, c.y, 8, 60, '#fff0c0', 0.5, 5);
       this.toast('秘宝庫を開いた'); Audio2.play('levelup');
-    } else {
-      for (let i = 0; i < c.loot; i++) c.contents.push(randomLoot(this.floor, this.derived.attr.LUCK));
-      if (chance(0.5)) this.run.gold += randInt(8, 30);
-    }
+    } else if (chance(0.5)) this.run.gold += randInt(8, 30);
     // 開封したらバッグ（中身）を開く
     this.openBag(c);
   },
@@ -1241,7 +1254,7 @@ const Game = {
 
   // 解脱の条件：報酬ポータルが「解脱門」化しているか（深層＋低業）
   isLiberation(portal) {
-    return !!(portal && portal.bonus && this.floor >= LIBERATION.floor && this.run && this.run.karma <= LIBERATION.karma);
+    return !!(portal && portal.bonus && this.floor >= LIBERATION.floor && this.run && this.run.karma <= liberationKarma(this.profile));
   },
 
   extract(portal) {

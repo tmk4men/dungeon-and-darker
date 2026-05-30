@@ -64,7 +64,8 @@ function computeDerived(p) {
   attr.LUCK += vFor * 3;
 
   const weapon = p.equipment.weapon;
-  const wtype = weapon ? WEAPON_TYPES[weapon.wtype] : WEAPON_TYPES[cls.weapon];
+  // 武器を失えば「素手」（弱い）。全ロストの心理と実戦性能を一致させる
+  const wtype = weapon ? WEAPON_TYPES[weapon.wtype] : WEAPON_TYPES.unarmed;
 
   // 重量 → 移動速度。STRで許容重量が増え、超過すると減速。
   const weight = sumWeight(p.equipment);

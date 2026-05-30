@@ -409,7 +409,10 @@ button { font-family: inherit; cursor: pointer; color: var(--ink); }
   padding: 7px 18px; box-shadow: 0 0 24px rgba(200,64,47,.5), inset 0 1px 0 rgba(255,220,150,.15);
   animation: zonePulse .8s ease-in-out infinite; }
 .karmainfo { position: absolute; top: calc(max(10px, env(safe-area-inset-top)) + 88px); left: max(64px, calc(env(safe-area-inset-left) + 58px));
-  display: none; font-family: var(--f-head); font-size: 11px; font-weight: 600; letter-spacing: .5px; color: #ff7a5a; text-shadow: 0 1px 4px #000; pointer-events: none; white-space: nowrap; }
+  display: none; font-family: var(--f-head); font-size: 11px; font-weight: 600; letter-spacing: .3px; color: #ff7a5a; text-shadow: 0 1px 4px #000; pointer-events: none; max-width: min(58vw, 280px); line-height: 1.5; }
+.karmainfo .lib-ok { color: #ffe6a8; text-shadow: 0 0 8px rgba(236,205,126,.7); }
+.karmainfo .lib-no { color: #c79bff; }
+.karmainfo .lib-dim { color: var(--ink-dim); font-weight: 400; }
 @keyframes zonePulse { 0%,100% { opacity: 1; } 50% { opacity: .4; } }
 
 #extract { position: absolute; top: 36%; left: 50%; transform: translateX(-50%); display: none; text-align: center; pointer-events: none; }

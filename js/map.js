@@ -268,6 +268,13 @@ function genDungeon(floor, derived) {
     }
   }
 
+  // 宝箱の中身を生成時に確定（デイリーの再現性のため。通常も入室時に固定）
+  for (const c of chests) {
+    const lk = (derived ? derived.attr.LUCK : 8) + (c.vault ? 12 : 0);
+    c.preroll = [];
+    for (let i = 0; i < c.loot; i++) c.preroll.push(randomLoot(floor + (c.vault ? 2 : 0), lk));
+  }
+
   const themeKey = pickTheme(floor);
   const theme = THEMES[themeKey];
 

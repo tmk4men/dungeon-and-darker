@@ -21,6 +21,7 @@ const WEAPON_TYPES = {
   spear:  { name: 'スピア',  kind: 'melee',  range: 116, arc: 0.85, base: 11, speed: 0.5, scaling: 'STR', crit: 0.07, color: '#d8d2c0' },
   tome:   { name: '魔導書',  kind: 'magic',  range: 500, base: 10, speed: 0.55, projSpeed: 440, scaling: 'WILL', crit: 0.05, color: '#c77dff' },
   flail:  { name: 'フレイル', kind: 'melee', range: 86, arc: 1.7, base: 13, speed: 0.6, scaling: 'STR', crit: 0.05, knock: 180, color: '#e6cf8a' },
+  unarmed:{ name: '素手',     kind: 'melee', range: 46, arc: 1.0, base: 3,  speed: 0.4, scaling: 'STR', crit: 0.03, color: '#e8c79c' },
 };
 
 // --- スキル定義 ---
@@ -117,7 +118,9 @@ const REMOVED_CLASS_MAP = { paladin: 'fighter', warlock: 'mage', lancer: 'rogue'
 
 // --- 輪廻メタ：解脱（NG+）・業・徳（永続パッシブ） ---
 // 解脱門の出現条件：一定以上の深度に、業（殺生）を低く保って到達したとき
-const LIBERATION = { floor: 4, karma: 10 };
+// 初回は緩め(14)、転生後は引き締め(12)
+const LIBERATION = { floor: 4, karma: 14 };
+function liberationKarma(p) { return (p && (p.rebirths || 0) > 0) ? 12 : 14; }
 // 転生（NG+）1回ごとのスケール
 const REBIRTH = { enemyScale: 0.18, lootLuck: 4 };
 // 徳（解脱で得た「徳」ポイントで永続強化）

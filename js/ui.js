@@ -399,7 +399,7 @@ const UI = {
         <button class="btn big enterdungeon">ダンジョンへ潜入</button>
         <p class="muted">下り階段で深く潜るほど強敵・高レア・高報酬。</p>
         <button class="btn big daily" style="margin-top:4px">今日の試練</button>
-        <p class="muted">全員共通の固定シード。今日の最高 ${fmt((p.daily && p.daily.date === todayKey() ? p.daily.best : 0) || 0)} ／ 自己最高 ${fmt(p.bestScore || 0)} 点</p>
+        <p class="muted">全員共通：地形・敵配置・宝が固定（戦闘の判定は都度）。今日の最高 ${fmt((p.daily && p.daily.date === todayKey() ? p.daily.best : 0) || 0)} ／ 自己最高 ${fmt(p.bestScore || 0)} 点</p>
       </div></div>
     </div>`;
   },
@@ -627,9 +627,14 @@ const UI = {
     }
     const ki = document.getElementById('karmainfo');
     if (ki && game.run) {
-      const tier = Math.min(3, Math.floor(game.run.karma / 15));
-      if (tier > 0) { ki.style.display = 'block'; ki.textContent = '業 ' + '●'.repeat(tier) + '○'.repeat(3 - tier) + ` 獄卒+${tier * 12}%`; }
-      else ki.style.display = 'none';
+      const k = Math.round(game.run.karma);
+      const pen = Math.round(game.karmaPenalty() * 100);
+      const thr = liberationKarma(game.profile);
+      const deep = game.floor >= LIBERATION.floor;
+      let txt = `業 ${k}　獄卒 +${pen}%`;
+      if (deep) txt += game.run.karma <= thr ? '　<span class="lib-ok">解脱の門 開く</span>' : `　<span class="lib-no">解脱 不可（業≤${thr}）</span>`;
+      else txt += `　<span class="lib-dim">解脱: 第${LIBERATION.floor}層・業≤${thr}</span>`;
+      ki.style.display = 'block'; ki.innerHTML = txt;
     }
     const zi = document.getElementById('zoneinfo');
     if (zi && game.zone) {
