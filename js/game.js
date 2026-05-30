@@ -1,0 +1,611 @@
+// ============================================================
+// game.js — エンティティ / 戦闘 / AI / 状態管理 / メインループ
+// ============================================================
+const Game = {
+  state: 'boot',           // boot / class_select / town / dungeon / result
+  profile: null,
+  derived: null,
+  dgn: null,
+  player: null,
+  enemies: [], projectiles: [], particles: [], floatTexts: [], groundItems: [], chests: [],
+  time: 0, lastT: 0,
+  selectedSkill: -1,       // -1 = ノーマル攻撃
+  floor: 1,
+  playerRoom: null,
+  run: null,
+  extractT: 0,
+  paused: false,
+  msg: '', msgT: 0,
+
+  // ---------- 起動 ----------
+  boot() {
+    Render.init(document.getElementById('game'));
+    Input.init(document.getElementById('game'));
+    UI.init();
+    this.profile = loadProfile();
+    if (this.profile) { this.derived = computeDerived(this.profile); this.goTown(); }
+    else this.goClassSelect();
+    this.lastT = performance.now();
+    requestAnimationFrame(t => this.loop(t));
+  },
+
+  goClassSelect() { this.state = 'class_select'; Input.enabled = false; UI.showClassSelect(); },
+
+  createCharacter(classId) {
+    this.profile = newProfile(classId);
+    this.derived = computeDerived(this.profile);
+    saveProfile(this.profile);
+    this.goTown();
+  },
+
+  goTown() {
+    this.state = 'town';
+    Input.enabled = false; Input.reset();
+    this.derived = computeDerived(this.profile);
+    saveProfile(this.profile);
+    UI.showTown();
+  },
+
+  // ---------- ダンジョン突入 ----------
+  enterDungeon(floor) {
+    this.floor = floor;
+    this.derived = computeDerived(this.profile);
+    this.dgn = genDungeon(floor, this.derived);
+    this.run = { loot: [], kills: 0, gold: 0, startGold: this.profile.gold };
+    this.selectedSkill = -1;
+    this.projectiles = []; this.particles = []; this.floatTexts = []; this.extractT = 0;
+
+    // プレイヤー生成（持ち込み装備のスナップショット）
+    const d = this.derived;
+    this.player = {
+      x: this.dgn.startX, y: this.dgn.startY, vx: 0, vy: 0, facing: -Math.PI / 2,
+      hp: d.hpmax, mp: d.mpmax, derived: d, classId: this.profile.classId,
+      skillCd: [0, 0], attackCd: 0, potionCd: 0, invuln: 0, buffs: [], dead: false,
+      skills: CLASSES[this.profile.classId].skills, potions: this.profile.potions.map(p => p ? { ...p } : null),
+    };
+
+    // 敵生成
+    this.enemies = this.dgn.enemySpawns.map(sp => this.makeEnemy(sp.type, sp.x, sp.y));
+    this.groundItems = this.dgn.groundItems.slice();
+    this.chests = this.dgn.chests.slice();
+
+    this.state = 'dungeon';
+    Input.enabled = true; Input.reset();
+    Input.fireCallback = (ang) => this.onFire(ang);
+    Input.aimChange = (ang) => { this.player.facing = ang; };
+    UI.showHUD();
+    UI.buildSkillBar(this);
+    this.toast(`ダンジョン 第${floor}層へ — 生きて脱出せよ`);
+  },
+
+  makeEnemy(type, x, y) {
+    const def = ENEMIES[type];
+    const sc = 1 + (this.floor - 1) * 0.16;
+    return {
+      type, x, y, vx: 0, vy: 0, facing: rand(0, TAU),
+      maxhp: Math.round(def.hp * sc), hp: Math.round(def.hp * sc),
+      atk: def.atk * sc, def: def.def, speed: def.speed,
+      r: def.r, state: 'idle', atkCd: rand(0, 1), wanderT: 0, wanderAng: rand(0, TAU),
+      hitFlash: 0, dead: false, slowT: 0, slowMul: 1, dotT: 0, dotDmg: 0, knockX: 0, knockY: 0,
+    };
+  },
+
+  // ---------- メインループ ----------
+  loop(t) {
+    let dt = (t - this.lastT) / 1000;
+    this.lastT = t;
+    if (dt > 0.05) dt = 0.05;
+    this.time += dt;
+
+    if (this.state === 'dungeon' && !this.paused) {
+      this.update(dt);
+      Render.render(this);
+      Input.poll();
+      Input.drawSticks(Render.ctx);
+      UI.updateHUD(this);
+    }
+    if (this.msgT > 0) this.msgT -= dt;
+    requestAnimationFrame(tt => this.loop(tt));
+  },
+
+  // ---------- 更新 ----------
+  update(dt) {
+    Input.poll();
+    const p = this.player, d = p.derived;
+
+    // バフ更新
+    p.buffs = p.buffs.filter(b => (b.t -= dt) > 0);
+
+    // 移動
+    let sp = d.speed;
+    for (const b of p.buffs) if (b.stat === 'speed') sp *= b.mult;
+    let mx = Input.move.x, my = Input.move.y;
+    const ml = len(mx, my);
+    if (ml > 0.05) {
+      const np = tryMove(this.dgn, p.x, p.y, CONFIG.PLAYER_R, mx * sp * dt, my * sp * dt);
+      p.x = np.x; p.y = np.y;
+      if (!Input.aimVec.active) p.facing = angleOf(mx, my);
+    }
+    // デスクトップ：マウスで照準
+    if (!Input.aimVec.active && (Input.keys[' '] || Input.mouse.down)) { }
+
+    // タイマー
+    p.attackCd = Math.max(0, p.attackCd - dt);
+    p.potionCd = Math.max(0, p.potionCd - dt);
+    p.invuln = Math.max(0, p.invuln - dt);
+    p.skillCd[0] = Math.max(0, p.skillCd[0] - dt);
+    p.skillCd[1] = Math.max(0, p.skillCd[1] - dt);
+    p.mp = Math.min(d.mpmax, p.mp + d.mpregen * dt);
+
+    // キーボード操作（スキル選択・ポーション・発射）
+    this.handleKeys(dt);
+
+    // 扉・拾得・宝箱・部屋リビール
+    this.updateDoors();
+    this.playerRoom = roomAt(this.dgn, p.x, p.y);
+    if (this.playerRoom && !this.playerRoom.revealed) this.playerRoom.revealed = true;
+    this.updatePickups();
+    this.updatePortal(dt);
+
+    // 敵
+    for (const e of this.enemies) if (!e.dead) this.updateEnemy(e, dt);
+    this.enemies = this.enemies.filter(e => !e.dead || e.deathT > 0);
+
+    // 投射物
+    this.updateProjectiles(dt);
+
+    // パーティクル・フロートテキスト
+    for (const pa of this.particles) { pa.x += pa.vx * dt; pa.y += pa.vy * dt; pa.vx *= 0.92; pa.vy *= 0.92; pa.life -= dt; }
+    this.particles = this.particles.filter(pa => pa.life > 0);
+    for (const f of this.floatTexts) { f.y += f.vy * dt; f.vy += 60 * dt; f.life -= dt; }
+    this.floatTexts = this.floatTexts.filter(f => f.life > 0);
+
+    if (p.hp <= 0 && !p.dead) this.die();
+  },
+
+  handleKeys(dt) {
+    const k = Input.keys;
+    if (k['1']) this.selectSkill(0);
+    if (k['2']) this.selectSkill(1);
+    if (k['0'] || k['`']) this.selectSkill(-1);
+    if (k['q']) { this.usePotion(0); k['q'] = false; }
+    if (k['e']) { this.usePotion(1); k['e'] = false; }
+    // スペース or 左クリックでマウス方向に発射
+    if (k[' ']) { k[' '] = false; const ang = angleOf(Input.mouse.x - CONFIG.VIEW_W / 2, Input.mouse.y - CONFIG.VIEW_H / 2); this.player.facing = ang; this.onFire(ang); }
+  },
+
+  // ---------- 発射（ノーマル or スキル） ----------
+  onFire(ang) {
+    const p = this.player;
+    if (p.dead) return;
+    if (ang === null) ang = p.facing;
+    p.facing = ang;
+    if (this.selectedSkill >= 0) {
+      const sid = p.skills[this.selectedSkill];
+      if (this.castSkill(sid, this.selectedSkill, ang)) return;
+      // 撃てなければノーマルにフォールバックしない（合図のみ）
+      return;
+    }
+    this.normalAttack(ang);
+  },
+
+  normalAttack(ang) {
+    const p = this.player, d = p.derived, wt = d.wtype;
+    if (p.attackCd > 0) return;
+    p.attackCd = wt.speed * d.atkSpeedMult;
+    const power = attackPower(d, wt.scaling);
+    if (wt.kind === 'melee') {
+      this.meleeSwing(p.x, p.y, ang, wt.range, wt.arc, power, { crit: d.crit, critDmg: d.critDmg, knock: wt.knock || 0, color: wt.color });
+    } else {
+      // ranged/magic：投射
+      this.spawnProjectile('player', p.x, p.y, ang, {
+        speed: wt.projSpeed, dmg: power, r: wt.kind === 'magic' ? 9 : 7,
+        color: wt.color, crit: d.crit, critDmg: d.critDmg, life: 1.2,
+      });
+    }
+    this.muzzle(p.x, p.y, ang, wt.color);
+  },
+
+  castSkill(sid, slot, ang) {
+    const p = this.player, d = p.derived, s = SKILLS[sid];
+    if (p.skillCd[slot] > 0) { this.toast('クールダウン中'); return false; }
+    if (p.mp < s.mp) { this.toast('MPが足りない'); return false; }
+    p.mp -= s.mp; p.skillCd[slot] = s.cd;
+    const power = s.scaling ? attackPower(d, s.scaling) * s.dmg : 0;
+    const opt = { crit: d.crit, critDmg: d.critDmg, color: s.color, holy: s.holy, dot: s.dot, slow: s.slow, knock: s.knock || 0 };
+
+    if (s.kind === 'projectile') {
+      const count = s.count || 1, spread = s.spread || 0;
+      for (let i = 0; i < count; i++) {
+        const a = ang + (count > 1 ? (i / (count - 1) - 0.5) * spread : 0);
+        this.spawnProjectile('player', p.x, p.y, a, {
+          speed: s.projSpeed, dmg: power, r: s.radius || 10, color: s.color,
+          pierce: s.pierce || 0, explode: s.explode, life: 1.6, ...opt,
+        });
+      }
+    } else if (s.kind === 'melee') {
+      this.meleeSwing(p.x, p.y, ang, s.range || 80, s.arc || 1.6, power, opt);
+    } else if (s.kind === 'nova') {
+      this.nova(p.x, p.y, s.radius, power, opt);
+    } else if (s.kind === 'heal') {
+      const amt = s.amount * d.healPow;
+      p.hp = Math.min(d.hpmax, p.hp + amt);
+      this.addFloat(p.x, p.y - 20, '+' + Math.round(amt), '#7dffa0', 18);
+      this.burst(p.x, p.y, s.color, 14);
+    } else if (s.kind === 'buff') {
+      p.buffs.push({ stat: s.stat, mult: s.mult, t: s.dur });
+      if (s.selfDef) p.buffs.push({ stat: 'defense', mult: s.selfDef, t: s.dur });
+      this.addFloat(p.x, p.y - 20, s.name + '!', s.color, 16);
+      this.burst(p.x, p.y, s.color, 12);
+    } else if (s.kind === 'dash') {
+      const nx = tryMove(this.dgn, p.x, p.y, CONFIG.PLAYER_R, Math.cos(ang) * s.dist, Math.sin(ang) * s.dist);
+      // ダッシュ経路上にダメージ
+      this.meleeSwing(nx.x, nx.y, ang, s.radius * 2, 2.2, power, opt);
+      this.burst(p.x, p.y, s.color, 10);
+      p.x = nx.x; p.y = nx.y; p.invuln = 0.25;
+    }
+    UI.buildSkillBar(this);
+    return true;
+  },
+
+  meleeSwing(x, y, ang, range, arc, power, opt) {
+    // 視覚
+    for (let i = 0; i < 7; i++) {
+      const a = ang + (i / 6 - 0.5) * arc;
+      const r = range * 0.7;
+      this.particles.push({ x: x + Math.cos(a) * r, y: y + Math.sin(a) * r, vx: Math.cos(a) * 40, vy: Math.sin(a) * 40, r: 4, color: opt.color || '#fff', life: 0.16, maxlife: 0.16 });
+    }
+    for (const e of this.enemies) {
+      if (e.dead) continue;
+      const dd = dist(x, y, e.x, e.y);
+      if (dd > range + e.r) continue;
+      const a = angleOf(e.x - x, e.y - y);
+      if (Math.abs(angDiff(ang, a)) > arc / 2 + 0.2) continue;
+      this.hitEnemy(e, power, ang, opt);
+    }
+  },
+
+  nova(x, y, radius, power, opt) {
+    this.burst(x, y, opt.color, 26, radius);
+    for (const e of this.enemies) {
+      if (e.dead) continue;
+      if (dist(x, y, e.x, e.y) <= radius + e.r) {
+        const a = angleOf(e.x - x, e.y - y);
+        this.hitEnemy(e, power, a, opt);
+      }
+    }
+  },
+
+  // ---------- 投射物 ----------
+  spawnProjectile(owner, x, y, ang, o) {
+    this.projectiles.push({
+      owner, x, y, ang, vx: Math.cos(ang) * o.speed, vy: Math.sin(ang) * o.speed,
+      r: o.r || 8, color: o.color || '#fff', dmg: o.dmg || 5,
+      pierce: o.pierce || 0, hits: new Set(), explode: o.explode || 0,
+      dot: o.dot, slow: o.slow, holy: o.holy, knock: o.knock || 0,
+      crit: o.crit || 0, critDmg: o.critDmg || 1.5, life: o.life || 1.5, maxlife: o.life || 1.5,
+    });
+  },
+
+  updateProjectiles(dt) {
+    for (const pr of this.projectiles) {
+      pr.x += pr.vx * dt; pr.y += pr.vy * dt; pr.life -= dt;
+      if (isSolidAt(this.dgn, pr.x, pr.y)) { if (pr.explode) this.explode(pr); pr.life = 0; continue; }
+      if (pr.owner === 'player') {
+        for (const e of this.enemies) {
+          if (e.dead || pr.hits.has(e)) continue;
+          if (dist(pr.x, pr.y, e.x, e.y) <= pr.r + e.r) {
+            pr.hits.add(e);
+            this.hitEnemy(e, pr.dmg, pr.ang, pr);
+            if (pr.explode) { this.explode(pr); pr.life = 0; break; }
+            if (pr.pierce-- <= 0) { pr.life = 0; break; }
+          }
+        }
+      } else {
+        const p = this.player;
+        if (!p.dead && p.invuln <= 0 && dist(pr.x, pr.y, p.x, p.y) <= pr.r + CONFIG.PLAYER_R) {
+          this.hurtPlayer(pr.dmg, true); pr.life = 0;
+        }
+      }
+    }
+    this.projectiles = this.projectiles.filter(pr => pr.life > 0);
+  },
+
+  explode(pr) {
+    this.burst(pr.x, pr.y, pr.color, 20, pr.explode);
+    for (const e of this.enemies) {
+      if (e.dead || pr.hits.has(e)) continue;
+      if (dist(pr.x, pr.y, e.x, e.y) <= pr.explode + e.r) this.hitEnemy(e, pr.dmg * 0.8, pr.ang, { ...pr, explode: 0 });
+    }
+  },
+
+  // ---------- ダメージ ----------
+  hitEnemy(e, power, ang, opt) {
+    let dmg = power;
+    const def = ENEMIES[e.type];
+    if (opt.holy && def.undead) dmg *= 1.6;
+    let crit = false;
+    if (opt.crit && Math.random() < opt.crit) { crit = true; dmg *= (opt.critDmg || 1.5); }
+    dmg = mitigate(dmg, e.def);
+    dmg = Math.max(1, Math.round(dmg));
+    e.hp -= dmg;
+    e.hitFlash = 0.12;
+    if (opt.dot) { e.dotT = opt.dot.dur; e.dotDmg = opt.dot.dmg; }
+    if (opt.slow) { e.slowT = opt.slow.dur; e.slowMul = opt.slow.mult; }
+    if (opt.knock) { e.knockX += Math.cos(ang) * opt.knock; e.knockY += Math.sin(ang) * opt.knock; }
+    this.addFloat(e.x, e.y - e.r - 6, '' + dmg, crit ? '#ffd24a' : '#ffffff', crit ? 22 : 15);
+    if (crit) this.burst(e.x, e.y, '#ffd24a', 6);
+    if (e.hp <= 0) this.killEnemy(e);
+  },
+
+  killEnemy(e) {
+    if (e.dead) return;
+    e.dead = true; e.deathT = 0;
+    const def = ENEMIES[e.type];
+    this.burst(e.x, e.y, def.color, 16);
+    this.run.kills++;
+    // ゴールド
+    const g = randInt(def.gold[0], def.gold[1]);
+    this.run.gold += g;
+    // ドロップ
+    const dropChance = def.boss ? 1 : 0.4;
+    if (Math.random() < dropChance) {
+      const n = def.boss ? 3 : 1;
+      for (let i = 0; i < n; i++) {
+        this.groundItems.push({ x: e.x + rand(-14, 14), y: e.y + rand(-14, 14), item: randomLoot(this.floor, this.derived.attr.LUCK, def.boss ? {} : {}) });
+      }
+    }
+    // スライム分裂
+    if (def.split && e.maxhp > 16) {
+      for (let i = 0; i < 2; i++) {
+        const c = this.makeEnemy('slime', e.x + rand(-12, 12), e.y + rand(-12, 12));
+        c.maxhp = Math.round(e.maxhp * 0.45); c.hp = c.maxhp; c.r = Math.max(8, e.r - 4);
+        this.enemies.push(c);
+      }
+    }
+  },
+
+  hurtPlayer(amount, magic) {
+    const p = this.player, d = p.derived;
+    if (p.dead || p.invuln > 0) return;
+    if (Math.random() < d.dodge) { this.addFloat(p.x, p.y - 24, '回避', '#aef', 14); p.invuln = 0.15; return; }
+    let dmg = amount;
+    if (magic) dmg *= (1 - d.magicResist);
+    let defense = d.defense;
+    for (const b of p.buffs) if (b.stat === 'defense') defense *= b.mult;
+    dmg = mitigate(dmg, defense);
+    dmg = Math.max(1, Math.round(dmg));
+    p.hp -= dmg; p.invuln = 0.25;
+    this.addFloat(p.x, p.y - 26, '-' + dmg, '#ff6a5a', 17);
+    UI.flashDamage();
+  },
+
+  // ---------- 敵AI ----------
+  updateEnemy(e, dt) {
+    const def = ENEMIES[e.type];
+    const p = this.player;
+    e.hitFlash = Math.max(0, e.hitFlash - dt);
+    e.atkCd = Math.max(0, e.atkCd - dt);
+    // ノックバック適用
+    if (Math.abs(e.knockX) + Math.abs(e.knockY) > 1) {
+      const np = tryMove(this.dgn, e.x, e.y, e.r, e.knockX * dt, e.knockY * dt);
+      e.x = np.x; e.y = np.y; e.knockX *= 0.86; e.knockY *= 0.86;
+    }
+    // DoT
+    if (e.dotT > 0) { e.dotT -= dt; e._dotAcc = (e._dotAcc || 0) + dt; if (e._dotAcc >= 0.5) { e._dotAcc = 0; e.hp -= e.dotDmg; this.addFloat(e.x, e.y - e.r, '' + e.dotDmg, '#7fe07f', 12); if (e.hp <= 0) { this.killEnemy(e); return; } } }
+    // スロー
+    let spd = e.speed;
+    if (e.slowT > 0) { e.slowT -= dt; spd *= e.slowMul; }
+
+    const dd = dist(e.x, e.y, p.x, p.y);
+    const aggro = dd < def.sight && this.hasLoS(e.x, e.y, p.x, p.y);
+    if (aggro) e.state = 'chase';
+
+    if (e.state === 'chase') {
+      e.facing = angleOf(p.x - e.x, p.y - e.y);
+      if (def.behavior === 'ranged') {
+        if (dd > def.range * 0.8) this.moveEnemy(e, e.facing, spd, dt);
+        else if (dd < def.range * 0.45) this.moveEnemy(e, e.facing + Math.PI, spd * 0.7, dt);
+        if (dd < def.range && e.atkCd <= 0 && this.hasLoS(e.x, e.y, p.x, p.y)) {
+          e.atkCd = 1.6;
+          this.spawnProjectile('enemy', e.x, e.y, e.facing, { speed: def.projSpeed, dmg: e.atk, r: 8, color: def.magic ? '#c77dff' : '#cfcfcf', life: 2.2 });
+        }
+      } else {
+        if (dd > def.range) this.moveEnemy(e, e.facing, spd, dt);
+        else if (e.atkCd <= 0) { e.atkCd = 1.0; this.hurtPlayer(e.atk, false); this.burst(p.x, p.y, '#ff8a6a', 6); }
+      }
+      if (dd > def.sight * 1.4) e.state = 'idle';
+    } else {
+      // 徘徊
+      e.wanderT -= dt;
+      if (e.wanderT <= 0) { e.wanderT = rand(0.8, 2.2); e.wanderAng = rand(0, TAU); e.moving = chance(0.6); }
+      if (e.moving) { this.moveEnemy(e, e.wanderAng, spd * 0.4, dt); e.facing = e.wanderAng; }
+    }
+  },
+
+  moveEnemy(e, ang, spd, dt) {
+    const np = tryMove(this.dgn, e.x, e.y, e.r, Math.cos(ang) * spd * dt, Math.sin(ang) * spd * dt);
+    // 他敵との簡易分離
+    e.x = np.x; e.y = np.y;
+  },
+
+  hasLoS(x1, y1, x2, y2) {
+    const T = CONFIG.TILE;
+    const d = dist(x1, y1, x2, y2);
+    const steps = Math.ceil(d / (T * 0.5));
+    for (let i = 1; i < steps; i++) {
+      const t = i / steps;
+      const x = lerp(x1, x2, t), y = lerp(y1, y2, t);
+      if (isSolidAt(this.dgn, x, y)) return false;
+    }
+    return true;
+  },
+
+  // ---------- 扉 / 拾得 / 宝箱 / ポータル ----------
+  updateDoors() {
+    const p = this.player, T = CONFIG.TILE;
+    const ptx = Math.floor(p.x / T), pty = Math.floor(p.y / T);
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+      const tx = ptx + dx, ty = pty + dy;
+      if (this.dgn.get(tx, ty) === T_DOOR) {
+        const cx = (tx + 0.5) * T, cy = (ty + 0.5) * T;
+        if (dist(p.x, p.y, cx, cy) < T * 1.0) {
+          this.dgn.set(tx, ty, T_DOOROPEN);
+          this.revealRoomsNearDoor(tx, ty);
+          this.toast('扉を開けた');
+        }
+      }
+    }
+  },
+
+  revealRoomsNearDoor(tx, ty) {
+    for (const r of this.dgn.rooms) {
+      if (tx >= r.x - 1 && tx <= r.x + r.w && ty >= r.y - 1 && ty <= r.y + r.h) r.revealed = true;
+    }
+  },
+
+  updatePickups() {
+    const p = this.player;
+    // 宝箱
+    for (const c of this.chests) {
+      if (c.opened) continue;
+      if (dist(p.x, p.y, c.x, c.y) < 40) {
+        c.opened = true;
+        this.toast('宝箱を開けた！');
+        this.burst(c.x, c.y, '#ffd27a', 18);
+        for (let i = 0; i < c.loot; i++) {
+          this.groundItems.push({ x: c.x + rand(-18, 18), y: c.y + rand(-18, 18), item: randomLoot(this.floor, this.derived.attr.LUCK) });
+        }
+        if (chance(0.5)) this.run.gold += randInt(8, 30);
+      }
+    }
+    // 地上アイテム
+    for (let i = this.groundItems.length - 1; i >= 0; i--) {
+      const g = this.groundItems[i];
+      if (dist(p.x, p.y, g.x, g.y) < CONFIG.PLAYER_R + 14) {
+        // ポーションは空きスロットへ
+        let placed = false;
+        if (g.item.slot === 'potion') {
+          for (let s = 0; s < p.potions.length; s++) if (!p.potions[s]) { p.potions[s] = g.item; placed = true; UI.buildSkillBar(this); break; }
+        }
+        if (!placed) this.run.loot.push(g.item);
+        const col = RARITY[g.item.rarity] ? RARITY[g.item.rarity].color : '#fff';
+        this.addFloat(g.x, g.y - 14, itemDisplayName(g.item), col, 13);
+        this.groundItems.splice(i, 1);
+      }
+    }
+  },
+
+  updatePortal(dt) {
+    const p = this.player, portal = this.dgn.portal;
+    const near = dist(p.x, p.y, portal.x, portal.y) < portal.r + CONFIG.PLAYER_R;
+    if (near) {
+      this.extractT += dt;
+      UI.showExtract(clamp(this.extractT / 2.2, 0, 1));
+      if (this.extractT >= 2.2) this.extract();
+    } else {
+      if (this.extractT > 0) UI.showExtract(0);
+      this.extractT = 0;
+    }
+  },
+
+  // ---------- ポーション ----------
+  usePotion(slot) {
+    const p = this.player;
+    if (p.potionCd > 0) return;
+    const it = p.potions[slot];
+    if (!it || !it.potion) return;
+    if (it.potion.hp) { p.hp = Math.min(p.derived.hpmax, p.hp + it.potion.hp); this.addFloat(p.x, p.y - 22, '+' + it.potion.hp, '#7dffa0', 17); }
+    if (it.potion.mp) { p.mp = Math.min(p.derived.mpmax, p.mp + it.potion.mp); this.addFloat(p.x, p.y - 22, '+' + it.potion.mp + ' MP', '#7db8ff', 17); }
+    this.burst(p.x, p.y, it.potion.mp ? '#7db8ff' : '#7dffa0', 10);
+    p.potions[slot] = null;
+    p.potionCd = 0.6;
+    UI.buildSkillBar(this);
+  },
+
+  selectSkill(i) {
+    if (i >= 0 && i >= this.player.skills.length) return;
+    this.selectedSkill = (this.selectedSkill === i) ? -1 : i;
+    UI.buildSkillBar(this);
+  },
+
+  // ---------- 死亡 / 脱出 ----------
+  die() {
+    this.player.dead = true;
+    this.state = 'result';
+    Input.enabled = false;
+    // ロスト：持ち込み装備＋ポーション＋取得品
+    const lost = [];
+    for (const slot in this.profile.equipment) { if (this.profile.equipment[slot]) { lost.push(this.profile.equipment[slot]); this.profile.equipment[slot] = null; } }
+    for (let i = 0; i < this.profile.potions.length; i++) { if (this.profile.potions[i]) { lost.push(this.profile.potions[i]); this.profile.potions[i] = null; } }
+    this.profile.runStats.deaths++;
+    this.profile.runStats.runs++;
+    this.profile.runStats.kills += this.run.kills;
+    // 死亡時もEXPは半分だけ
+    const xp = Math.round(this.run.kills * 6 + this.floor * 10);
+    grantXP(this.profile, xp);
+    saveProfile(this.profile);
+    UI.showResult(false, { kills: this.run.kills, gold: 0, xp, lost, loot: this.run.loot });
+  },
+
+  extract() {
+    this.state = 'result';
+    Input.enabled = false;
+    // 取得品をストレージへ、ゴールド加算
+    for (const it of this.run.loot) this.profile.stash.push(it);
+    this.profile.gold += this.run.gold;
+    // 道中で使用/取得したポーションの状態を反映
+    this.profile.potions = this.player.potions.map(x => x || null);
+    const xp = Math.round(this.run.kills * 10 + this.floor * 25 + this.run.loot.length * 5);
+    const leveled = grantXP(this.profile, xp);
+    this.profile.runStats.extracts++;
+    this.profile.runStats.runs++;
+    this.profile.runStats.kills += this.run.kills;
+    this.profile.runStats.gold += this.run.gold;
+    saveProfile(this.profile);
+    this.burst(this.player.x, this.player.y, '#7fd0ff', 30);
+    UI.showResult(true, { kills: this.run.kills, gold: this.run.gold, xp, leveled, loot: this.run.loot });
+  },
+
+  abandon() {
+    // 退却＝死亡扱い（持ち込みロスト）
+    this.die();
+  },
+
+  // ---------- FX ----------
+  burst(x, y, color, n, spread = 30) {
+    for (let i = 0; i < n; i++) {
+      const a = rand(0, TAU), s = rand(40, 40 + spread * 3);
+      this.particles.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, r: rand(2, 5), color, life: rand(0.2, 0.5), maxlife: 0.5 });
+    }
+  },
+  muzzle(x, y, ang, color) {
+    for (let i = 0; i < 4; i++) {
+      const a = ang + rand(-0.3, 0.3), s = rand(60, 160);
+      this.particles.push({ x: x + Math.cos(ang) * 16, y: y + Math.sin(ang) * 16, vx: Math.cos(a) * s, vy: Math.sin(a) * s, r: rand(2, 4), color, life: 0.2, maxlife: 0.2 });
+    }
+  },
+  addFloat(x, y, text, color, size) {
+    this.floatTexts.push({ x, y, text, color, size, vy: -40, life: 0.9, maxlife: 0.9 });
+  },
+  toast(msg) { this.msg = msg; this.msgT = 2.2; UI.toast(msg); },
+};
+
+// ---------- 衝突ヘルパー ----------
+function solidCircle(dgn, x, y, r) {
+  return isSolidAt(dgn, x - r, y) || isSolidAt(dgn, x + r, y) ||
+    isSolidAt(dgn, x, y - r) || isSolidAt(dgn, x, y + r) ||
+    isSolidAt(dgn, x - r * 0.7, y - r * 0.7) || isSolidAt(dgn, x + r * 0.7, y + r * 0.7) ||
+    isSolidAt(dgn, x - r * 0.7, y + r * 0.7) || isSolidAt(dgn, x + r * 0.7, y - r * 0.7);
+}
+function tryMove(dgn, x, y, r, dx, dy) {
+  let nx = x + dx;
+  if (!solidCircle(dgn, nx, y, r)) x = nx;
+  let ny = y + dy;
+  if (!solidCircle(dgn, x, ny, r)) y = ny;
+  return { x, y };
+}
+function mitigate(amount, defense) { return amount * (1 - defense / (defense + CONFIG.DEFENSE_K)); }
+
+window.Game = Game;
+window.addEventListener('load', () => Game.boot());

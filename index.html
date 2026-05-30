@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#05060a">
+<title>Dungeon &amp; Darker</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="app">
+    <canvas id="game"></canvas>
+
+    <!-- ダンジョンHUD -->
+    <div id="hud">
+      <div id="dmgflash"></div>
+      <!-- 左上：HP/MP -->
+      <div class="hud-vitals">
+        <div class="vital hp"><div class="vlabel">HP</div><div class="vbar"><div id="hpfill" class="vfill"></div><span id="hptext"></span></div></div>
+        <div class="vital mp"><div class="vlabel">MP</div><div class="vbar"><div id="mpfill" class="vfill"></div><span id="mptext"></span></div></div>
+        <div id="runinfo" class="runinfo"></div>
+      </div>
+      <!-- 右上：退却 -->
+      <button id="abandon" class="hud-btn">≡ 退却</button>
+      <!-- 中央：脱出ゲージ -->
+      <div id="extract"></div>
+      <!-- 右下：スキル＆ポーション -->
+      <div id="skillbar"></div>
+      <!-- 操作ヒント -->
+      <div class="hint left-hint">移動</div>
+      <div class="hint right-hint">スキル選択→ここをドラッグで攻撃</div>
+    </div>
+
+    <!-- メニュー類 -->
+    <div id="overlay"></div>
+
+    <!-- 通知 -->
+    <div id="toast"></div>
+
+    <!-- 縦持ち注意 -->
+    <div id="rotate">📱 横向きにしてプレイしてください</div>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/utils.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/items.js"></script>
+  <script src="js/save.js"></script>
+  <script src="js/map.js"></script>
+  <script src="js/render.js"></script>
+  <script src="js/input.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/game.js"></script>
+  <script>
+    // 退却ボタン
+    document.getElementById('abandon').addEventListener('click', () => {
+      if (Game.state === 'dungeon' && confirm('退却しますか？（持ち込んだ装備・戦利品を失います）')) Game.abandon();
+    });
+  </script>
+</body>
+</html>

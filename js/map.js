@@ -1,0 +1,190 @@
+// ============================================================
+// map.js — ダンジョン生成（部屋グリッド＋通路＋扉＋光源＋湧き）
+// ============================================================
+const T_WALL = 0, T_FLOOR = 1, T_DOOR = 2, T_DOOROPEN = 3;
+
+function genDungeon(floor, derived) {
+  const cols = 4, rows = 3;
+  const cellW = 17, cellH = 15;
+  const W = cols * cellW, H = rows * cellH;
+  const tiles = new Uint8Array(W * H); // 0=wall
+
+  const idx = (x, y) => y * W + x;
+  const get = (x, y) => (x < 0 || y < 0 || x >= W || y >= H) ? T_WALL : tiles[idx(x, y)];
+  const set = (x, y, v) => { if (x >= 0 && y >= 0 && x < W && y < H) tiles[idx(x, y)] = v; };
+
+  const rooms = [];
+  const grid = [];
+
+  // --- 各セルに部屋を配置 ---
+  for (let cy = 0; cy < rows; cy++) {
+    for (let cx = 0; cx < cols; cx++) {
+      const ox = cx * cellW, oy = cy * cellH;
+      const rw = randInt(7, cellW - 4);
+      const rh = randInt(6, cellH - 4);
+      const rx = ox + randInt(2, cellW - rw - 2);
+      const ry = oy + randInt(2, cellH - rh - 2);
+      for (let y = ry; y < ry + rh; y++)
+        for (let x = rx; x < rx + rw; x++) set(x, y, T_FLOOR);
+      const lit = chance(0.45);
+      const room = {
+        id: rooms.length, cx, cy,
+        x: rx, y: ry, w: rw, h: rh,
+        ccx: rx + (rw >> 1), ccy: ry + (rh >> 1),
+        revealed: false, lit, ambient: lit ? 0.5 : 0.92, lights: [],
+      };
+      grid[cy * cols + cx] = room;
+      rooms.push(room);
+    }
+  }
+
+  // --- 通路カーブ ---
+  const carveCorridor = (ax, ay, bx, by) => {
+    const hFirst = chance(0.5);
+    const stepX = ax < bx ? 1 : -1, stepY = ay < by ? 1 : -1;
+    const carveCell = (x, y) => { if (get(x, y) === T_WALL) set(x, y, T_FLOOR); };
+    if (hFirst) {
+      for (let x = ax; x !== bx + stepX; x += stepX) { carveCell(x, ay); carveCell(x, ay + 1); }
+      for (let y = ay; y !== by + stepY; y += stepY) { carveCell(bx, y); carveCell(bx + 1, y); }
+    } else {
+      for (let y = ay; y !== by + stepY; y += stepY) { carveCell(ax, y); carveCell(ax + 1, y); }
+      for (let x = ax; x !== bx + stepX; x += stepX) { carveCell(x, by); carveCell(x, by + 1); }
+    }
+  };
+
+  // --- 隣接セルを全域木＋ループで接続 ---
+  const parent = grid.map((_, i) => i);
+  const find = (a) => { while (parent[a] !== a) { parent[a] = parent[parent[a]]; a = parent[a]; } return a; };
+  const edges = [];
+  for (let cy = 0; cy < rows; cy++) for (let cx = 0; cx < cols; cx++) {
+    if (cx < cols - 1) edges.push([cy * cols + cx, cy * cols + cx + 1]);
+    if (cy < rows - 1) edges.push([cy * cols + cx, (cy + 1) * cols + cx]);
+  }
+  shuffle(edges);
+  for (const [a, b] of edges) {
+    const extra = chance(0.28);
+    if (find(a) !== find(b) || extra) {
+      parent[find(a)] = find(b);
+      const ra = grid[a], rb = grid[b];
+      carveCorridor(ra.ccx, ra.ccy, rb.ccx, rb.ccy);
+    }
+  }
+
+  // --- 扉：各部屋の外周リングにできた床＝出入口 → 扉に ---
+  for (const r of rooms) {
+    for (let x = r.x - 1; x <= r.x + r.w; x++) {
+      for (let y = r.y - 1; y <= r.y + r.h; y++) {
+        const onRing = (x === r.x - 1 || x === r.x + r.w || y === r.y - 1 || y === r.y + r.h);
+        const inside = (x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h);
+        if (onRing && !inside && get(x, y) === T_FLOOR) set(x, y, T_DOOR);
+      }
+    }
+  }
+
+  // --- 光源（ライト部屋） ---
+  const lights = [];
+  for (const r of rooms) {
+    if (!r.lit) continue;
+    const n = randInt(1, 2);
+    for (let i = 0; i < n; i++) {
+      const lx = (r.x + randInt(1, r.w - 2) + 0.5) * CONFIG.TILE;
+      const ly = (r.y + randInt(1, r.h - 2) + 0.5) * CONFIG.TILE;
+      const l = { x: lx, y: ly, radius: rand(130, 200), color: choice(['#ffae5b', '#ffd27a', '#ff9b50']), flick: rand(0, TAU) };
+      r.lights.push(l); lights.push(l);
+    }
+  }
+
+  // --- 出撃地点（最初の部屋）と脱出ポータル（最も遠い部屋） ---
+  const start = rooms[0];
+  start.revealed = true;
+  let portalRoom = rooms[0], best = -1;
+  for (const r of rooms) {
+    const d = Math.abs(r.cx - start.cx) + Math.abs(r.cy - start.cy);
+    if (d > best) { best = d; portalRoom = r; }
+  }
+  const portal = { x: (portalRoom.ccx + 0.5) * CONFIG.TILE, y: (portalRoom.ccy + 0.5) * CONFIG.TILE, r: 30, room: portalRoom };
+
+  // --- 湧き：敵・宝箱・地上アイテム ---
+  const enemySpawns = [];
+  const chests = [];
+  const groundItems = [];
+  const floorTypes = floorEnemyPool(floor);
+
+  for (const r of rooms) {
+    if (r === start) continue;
+    // 敵
+    let count = randInt(1, 2 + Math.min(floor, 4));
+    if (r === portalRoom && floor >= 2) {
+      // ボス部屋
+      enemySpawns.push({ type: floor >= 3 ? 'ogre' : 'lich', x: (r.ccx + 0.5) * CONFIG.TILE, y: (r.ccy + 0.5) * CONFIG.TILE });
+      count = Math.max(0, count - 2);
+    }
+    for (let i = 0; i < count; i++) {
+      const type = weightedPick(floorTypes);
+      enemySpawns.push({
+        type,
+        x: (r.x + randInt(1, r.w - 2) + 0.5) * CONFIG.TILE,
+        y: (r.y + randInt(1, r.h - 2) + 0.5) * CONFIG.TILE,
+      });
+    }
+    // 宝箱
+    if (chance(0.7)) {
+      chests.push({
+        x: (r.x + randInt(1, r.w - 2) + 0.5) * CONFIG.TILE,
+        y: (r.y + randInt(1, r.h - 2) + 0.5) * CONFIG.TILE,
+        opened: false, r: 18,
+        loot: 1 + randInt(0, 2),
+      });
+    }
+    // 地上アイテム（ポーション等）
+    if (chance(0.5)) {
+      groundItems.push({
+        x: (r.x + randInt(1, r.w - 2) + 0.5) * CONFIG.TILE,
+        y: (r.y + randInt(1, r.h - 2) + 0.5) * CONFIG.TILE,
+        item: randomLoot(floor, derived ? derived.attr.LUCK : 8, { kind: chance(0.6) ? 'potion' : undefined }),
+      });
+    }
+  }
+
+  return {
+    floor, W, H, tiles, rooms, lights, portal,
+    get, set,
+    startX: (start.ccx + 0.5) * CONFIG.TILE,
+    startY: (start.ccy + 0.5) * CONFIG.TILE,
+    enemySpawns, chests, groundItems,
+    pxW: W * CONFIG.TILE, pxH: H * CONFIG.TILE,
+  };
+}
+
+function floorEnemyPool(floor) {
+  const pool = [
+    { item: 'skeleton', weight: 10 },
+    { item: 'bat', weight: 8 },
+    { item: 'slime', weight: 7 },
+    { item: 'goblin', weight: 6 + floor },
+    { item: 'skel_archer', weight: 5 + floor },
+    { item: 'zombie', weight: 4 + floor },
+    { item: 'warlock', weight: 2 + floor * 1.5 },
+  ];
+  return pool;
+}
+
+// 座標がソリッド（壁 or 閉扉）か
+function isSolidAt(dgn, px, py) {
+  const tx = Math.floor(px / CONFIG.TILE), ty = Math.floor(py / CONFIG.TILE);
+  const t = dgn.get(tx, ty);
+  return t === T_WALL || t === T_DOOR;
+}
+// 視界を遮るか（壁 or 閉扉）
+function isOpaqueAt(dgn, tx, ty) {
+  const t = dgn.get(tx, ty);
+  return t === T_WALL || t === T_DOOR;
+}
+// 座標を含む部屋
+function roomAt(dgn, px, py) {
+  const tx = Math.floor(px / CONFIG.TILE), ty = Math.floor(py / CONFIG.TILE);
+  for (const r of dgn.rooms) {
+    if (tx >= r.x && tx < r.x + r.w && ty >= r.y && ty < r.y + r.h) return r;
+  }
+  return null;
+}
