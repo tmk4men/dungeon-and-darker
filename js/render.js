@@ -18,13 +18,19 @@ const Render = {
   resize() {
     const w = window.innerWidth, h = window.innerHeight;
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    this.canvas.width = CONFIG.VIEW_W * dpr;
-    this.canvas.height = CONFIG.VIEW_H * dpr;
+    // 縦の見える範囲（ズーム）を一定に保ち、横は画面比で可変＝歪まず画面にフィット
+    const baseH = CONFIG.BASE_H;
+    const aspect = clamp(w / Math.max(1, h), 1.0, 3.0);
+    const W = Math.round(baseH * aspect);
+    CONFIG.VIEW_W = W;
+    CONFIG.VIEW_H = baseH;
+    this.canvas.width = W * dpr;
+    this.canvas.height = baseH * dpr;
     this.canvas.style.width = w + 'px';
     this.canvas.style.height = h + 'px';
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    this.light.width = CONFIG.VIEW_W;
-    this.light.height = CONFIG.VIEW_H;
+    this.light.width = W;
+    this.light.height = baseH;
   },
 
   worldToScreen(x, y) { return { x: x - this.cam.x, y: y - this.cam.y }; },
