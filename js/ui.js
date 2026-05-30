@@ -64,7 +64,9 @@ const UI = {
 
   rarityTag(it) {
     const r = RARITY[it.rarity];
-    return `<span class="rar" style="color:${r.color}">${itemDisplayName(it)}</span>`;
+    const url = (typeof Sprites !== 'undefined') ? Sprites.iconURL(it) : '';
+    const icon = url ? `<img class="item-icon" src="${url}" style="--rc:${r.color}" alt="">` : '';
+    return `<span class="item-line">${icon}<span class="rar" style="color:${r.color}">${itemDisplayName(it)}</span></span>`;
   },
 
   // -------- 職業選択 --------
@@ -472,8 +474,9 @@ const UI = {
     });
     html += `</div><div class="potrow">`;
     p.potions.forEach((it, i) => {
+      const purl = it && typeof Sprites !== 'undefined' ? Sprites.iconURL(it) : '';
       html += `<button class="potbtn ${it ? '' : 'empty'}" data-pot="${i}">
-        ${it ? `<div class="potic">${it.potion && it.potion.mp ? 'MP' : 'HP'}</div><div class="potlbl">${it.name.replace('ポーション', '')}</div>` : '<div class="potic">＋</div>'}
+        ${it ? `${purl ? `<img class="potic-img" src="${purl}" alt="">` : `<div class="potic">${it.potion && it.potion.mp ? 'MP' : 'HP'}</div>`}<div class="potlbl">${it.name.replace('ポーション', '')}</div>` : '<div class="potic">＋</div>'}
       </button>`;
     });
     html += `</div>`;

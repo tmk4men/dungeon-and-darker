@@ -394,16 +394,15 @@ const Render = {
       beam.addColorStop(0, 'rgba(0,0,0,0)'); beam.addColorStop(1, hexA(col, 0.35));
       ctx.fillStyle = beam; ctx.fillRect(-5, -36, 10, 40);
     }
-    ctx.fillStyle = hexA(col, rare ? 0.32 : 0.22);
-    ctx.beginPath(); ctx.arc(0, 0, rare ? 14 : 11, 0, TAU); ctx.fill();
-    if (rare) { ctx.shadowColor = col; ctx.shadowBlur = 12; }
-    ctx.fillStyle = col;
-    if (g.item.slot === 'potion') {
-      ctx.fillRect(-3, -6, 6, 10);
-      ctx.fillStyle = '#e8e0d0'; ctx.fillRect(-2, -8, 4, 3);
-    } else {
-      ctx.beginPath(); ctx.arc(0, 0, 5, 0, TAU); ctx.fill();
-    }
+    ctx.fillStyle = hexA(col, rare ? 0.3 : 0.2);
+    ctx.beginPath(); ctx.arc(0, 0, rare ? 15 : 12, 0, TAU); ctx.fill();
+    // ドット絵アイコン
+    const spr = Sprites.iconCanvas(g.item);
+    const sc = (rare ? 22 : 19) / Math.max(spr._w, spr._h);
+    const w = spr._w * sc, h = spr._h * sc;
+    ctx.imageSmoothingEnabled = false;
+    if (rare) { ctx.shadowColor = col; ctx.shadowBlur = 10; }
+    ctx.drawImage(spr, Math.round(-w / 2), Math.round(-h / 2), w, h);
     ctx.shadowBlur = 0;
     ctx.restore();
   },

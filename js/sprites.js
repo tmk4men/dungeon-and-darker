@@ -48,6 +48,30 @@ const Sprites = {
   templateOf(type) { return (ENEMY_SPRITE[type] || { t: 'demon' }).t; },
   get(tmpl, col) { return this.make(tmpl, SPR[tmpl], col); },
 
+  // アイテムアイコン（行幅は自動でパディング）
+  makeIcon(key) {
+    const ck = 'ic|' + key;
+    if (this.cache[ck]) return this.cache[ck];
+    const rows = ICONS[key] || ICONS.coin;
+    const w = Math.max(...rows.map(r => r.length)), h = rows.length;
+    const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+    const c = cv.getContext('2d');
+    for (let y = 0; y < h; y++) {
+      const row = rows[y];
+      for (let x = 0; x < row.length; x++) { const col = ICON_PAL[row[x]]; if (col) { c.fillStyle = col; c.fillRect(x, y, 1, 1); } }
+    }
+    cv._w = w; cv._h = h; this.cache[ck] = cv; return cv;
+  },
+  iconCanvas(item) { return this.makeIcon(iconKey(item)); },
+  iconURL(item) {
+    const key = iconKey(item), ck = 'url|' + key;
+    this._urls = this._urls || {};
+    if (this._urls[ck] !== undefined) return this._urls[ck];
+    const cv = this.makeIcon(key); let url = '';
+    try { if (cv.toDataURL) url = cv.toDataURL(); } catch (e) { url = ''; }
+    this._urls[ck] = url; return url;
+  },
+
   // 被弾点滅用の白シルエット（テンプレ単位でキャッシュ）
   flash(tmpl) {
     const ck = 'flash|' + tmpl;
@@ -209,6 +233,52 @@ const SPR = {
     '....................',
   ],
 };
+
+// --- アイテムアイコン ---
+const ICON_PAL = {
+  '.': null, 'O': '#120d08',
+  'i': '#aab0bc', 'I': '#e8edf4', 'd': '#767c88',
+  'w': '#8a5a30', 'W': '#aa723f', 'l': '#7a5232', 'L': '#9c6d42',
+  'g': '#caa24c', 'G': '#f2d98a',
+  'r': '#b6322c', 'R': '#e8665a', 'b': '#3f7fc4', 'B': '#80b2e8',
+  'p': '#8a4fc6', 'P': '#c79bf0', 'e': '#6fae8a', 's': '#cfc6b4', 'k': '#d8b48a',
+};
+const ICONS = {
+  blade: ['.......O........', '......OIO.......', '......OIO.......', '......OIO.......', '......OIO.......', '......OIO.......', '.....OOIOO......', '...OGGGGGGGO....', '......OwO.......', '......OwO.......', '......OWO.......', '.....OGGGO.....', '......OOO.......'],
+  hammer: ['...OOOOOOO...', '..OiIIIIIIO..', '..OiIIIIIIO..', '..OiIIIIIIO..', '..OOOOwOOOO..', '.....OwO.....', '.....OwO.....', '.....OwO.....', '.....OwO.....', '.....OWO.....', '.....OOO.....'],
+  bow: ['....OG......', '...OGGO.....', '..OGO.s.....', '..OG..s.....', '.OG...s.....', '.OG...s.....', '.OG...s.....', '..OG..s.....', '..OGO.s.....', '...OGGO.....', '....OG......'],
+  staff: ['......OPO......', '.....OPPPO.....', '.....OPpPO.....', '......OPO......', '......OwO......', '......OwO......', '......OwO......', '......OwO......', '......OwO......', '.....OWO.......', '.....OO........'],
+  helm: ['....OOOOOO....', '...OiIIIIiO...', '..OiIIIIIIiO..', '..OiIddddIiO..', '..OiIddddIiO..', '..OiIIIIIIiO..', '..OiIIIIIIiO..', '...OiIIIIiO...', '....OOOOOO....'],
+  chest: ['..OOO..OOO..', '.OiIIOOIIiO.', 'OiIIIIIIIIIO', 'OiIIIddIIIIO', 'OiIIIddIIIIO', 'OiIIIIIIIIIO', 'OiIIIIIIIIIO', '.OiIIIIIIiO.', '..OiIIIIiO..', '...OOOOOO...'],
+  glove: ['...OO.OO....', '..OiIOiIO...', '..OiIIIIO...', '.OiIIIIIIO..', 'OiIIIIIIIIO.', 'OiIIIIIIIIO.', 'OiIIddIIIIO.', '.OiIIIIIIO..', '..OOOOOOO...'],
+  boot: ['...OOO......', '..OlLLO.....', '..OlLLO.....', '..OlLLO.....', '..OlLLO.....', '..OlLLOOOO..', '..OlLLLLLLO.', '.OllLLLLLLLO', '.OOOOOOOOOOO'],
+  ring: ['....OGGGO....', '...OG...GO...', '..OG.OpO.GO..', '..OG.OPO.GO..', '..OG.OOO.GO..', '...OG...GO...', '....OGGGO....'],
+  torch: ['......Or......', '.....OrRrO....', '.....ORrRO....', '......OrO.....', '......OwO.....', '......OwO.....', '......OwO.....', '......OwO.....', '......OWO.....'],
+  potionR: ['.....OO.....', '.....OsO....', '....OssO....', '...ORRRRO...', '..ORRRRRRO..', '..ORrRRRRO..', '..ORRRRRRO..', '...ORRRRO...', '....OOOO....'],
+  potionB: ['.....OO.....', '.....OsO....', '....OssO....', '...OBBBBO...', '..OBBBBBBO..', '..OBbBBBBO..', '..OBBBBBBO..', '...OBBBBO...', '....OOOO....'],
+  coin: ['...OGGGGO...', '..OGGGGGGO..', '.OGGgGGgGGO.', '.OGgGGGGgGO.', '.OGGgGGgGGO.', '..OGGGGGGO..', '...OGGGGO...'],
+  gem: ['....OOOO....', '...OpPPpO...', '..OpPPPPpO..', '.OpPPPPPPpO.', '..OpPPPPpO..', '...OpPPpO...', '....OppO....', '.....OO.....'],
+  crown: ['..O..O..O...', '..O..O..O...', '.OGOGOGOGO..', '.OGgGGgGGO..', '.OGGGGGGGO..', '.OOOOOOOOO..'],
+};
+function iconKey(it) {
+  if (!it) return 'coin';
+  if (it.slot === 'weapon') {
+    const w = it.wtype;
+    if (['sword', 'dagger', 'spear'].includes(w)) return 'blade';
+    if (['hammer', 'mace', 'flail'].includes(w)) return 'hammer';
+    if (w === 'bow') return 'bow';
+    return 'staff';
+  }
+  if (it.slot === 'head') return 'helm';
+  if (it.slot === 'chest') return 'chest';
+  if (it.slot === 'hands') return 'glove';
+  if (it.slot === 'legs') return 'boot';
+  if (it.slot === 'ring') return 'ring';
+  if (it.slot === 'torch') return 'torch';
+  if (it.slot === 'potion') return (it.potion && it.potion.mp) ? 'potionB' : 'potionR';
+  if (it.slot === 'treasure') { if (it.baseId === 'tr_crown') return 'crown'; if (it.baseId === 'tr_gem') return 'gem'; return 'coin'; }
+  return 'coin';
+}
 
 // 敵タイプ → スプライト種別
 const ENEMY_SPRITE = {
