@@ -195,6 +195,17 @@ function genDungeon(floor, derived) {
     }
   }
 
+  // --- 秘宝庫（鍵付き・開封に時間がかかる高リスク報酬）。奥の部屋に1つ ---
+  {
+    const farRooms = rooms.filter(r => r !== start).sort((a, b) => (Math.abs(b.cx - start.cx) + Math.abs(b.cy - start.cy)) - (Math.abs(a.cx - start.cx) + Math.abs(a.cy - start.cy)));
+    const vr = farRooms[randInt(0, Math.min(2, farRooms.length - 1))];
+    if (vr) chests.push({
+      x: (vr.x + randInt(1, vr.w - 2) + 0.5) * CONFIG.TILE,
+      y: (vr.y + randInt(1, vr.h - 2) + 0.5) * CONFIG.TILE,
+      opened: false, r: 20, vault: true, loot: 4 + randInt(0, 2),
+    });
+  }
+
   // --- トラップ ---
   const traps = [];
   const trapCount = 3 + floor * 2;

@@ -21,6 +21,8 @@ function newProfile(classId) {
     rebirths: 0,        // 転生（解脱）回数 = NG+
     merit: 0,           // 徳ポイント（解脱で獲得）
     virtues: {},        // 購入した徳（id→段数）
+    bestScore: 0,       // 最高スコア
+    daily: { date: '', best: 0 }, // 今日の試練の記録
   };
   // 初期装備：職業の標準武器＋トーチ＋ポーション
   const wmap = { sword: 'w_sword', hammer: 'w_hammer', dagger: 'w_dagger', mace: 'w_mace', bow: 'w_bow', staff: 'w_staff', spear: 'w_spear', tome: 'w_tome', flail: 'w_flail' };

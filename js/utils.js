@@ -23,11 +23,26 @@ function rotateToward(a, b, maxStep) {
   return a + Math.sign(d) * maxStep;
 }
 
-// 乱数
-function rand(a = 1, b) { if (b === undefined) { b = a; a = 0; } return a + Math.random() * (b - a); }
+// 乱数（_rng は差し替え可能：デイリーは固定シードに）
+let _rng = Math.random;
+function rng() { return _rng(); }
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function seedRng(seed) { _rng = mulberry32(seed >>> 0); }
+function unseedRng() { _rng = Math.random; }
+function hashStr(s) { let h = 2166136261 >>> 0; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
+
+function rand(a = 1, b) { if (b === undefined) { b = a; a = 0; } return a + rng() * (b - a); }
 function randInt(a, b) { return Math.floor(rand(a, b + 1)); }
-function chance(p) { return Math.random() < p; }
-function choice(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+function chance(p) { return rng() < p; }
+function choice(arr) { return arr[Math.floor(rng() * arr.length)]; }
 function shuffle(arr) {
   for (let i = arr.length - 1; i > 0; i--) { const j = randInt(0, i);[arr[i], arr[j]] = [arr[j], arr[i]]; }
   return arr;
@@ -37,7 +52,7 @@ function weightedPick(entries) {
   // entries: [{item, weight}]
   let total = 0;
   for (const e of entries) total += e.weight;
-  let r = Math.random() * total;
+  let r = rng() * total;
   for (const e of entries) { r -= e.weight; if (r <= 0) return e.item; }
   return entries[entries.length - 1].item;
 }

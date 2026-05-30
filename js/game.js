@@ -87,6 +87,8 @@ const Game = {
       if (typeof this.profile.rebirths !== 'number') this.profile.rebirths = 0;
       if (typeof this.profile.merit !== 'number') this.profile.merit = 0;
       if (!this.profile.virtues) this.profile.virtues = {};
+      if (typeof this.profile.bestScore !== 'number') this.profile.bestScore = 0;
+      if (!this.profile.daily) this.profile.daily = { date: '', best: 0 };
       if (!this.profile.loadout || !this.profile.loadout.length) this.profile.loadout = (CLASS_SKILL_POOL[this.profile.classId] || CLASSES[this.profile.classId].skills).slice(0, 3);
       if (this.profile.bounties.length < 3) {
         const need = 3 - this.profile.bounties.length;
@@ -104,7 +106,9 @@ const Game = {
   },
 
   // ---------- ダンジョン突入（深度1から。階段で潜るほど難化＆高レア化） ----------
-  enterDungeon() {
+  enterDungeon(opts) {
+    this.daily = !!(opts && opts.daily);
+    this.dailySeed = this.daily ? hashStr(todayKey()) : 0;
     this.floor = 1;
     this.derived = computeDerived(this.profile);
     this.run = { bag: newBag(), kills: 0, gold: 0, startGold: this.profile.gold, karma: 0 };
@@ -131,9 +135,25 @@ const Game = {
     UI.buildSkillBar(this);
   },
 
+  // 今日の試練（デイリー：全プレイヤー共通の固定シード）
+  startDaily() { UI.hideAll(); this.enterDungeon({ daily: true }); this.toast('今日の試練 — ' + todayKey()); },
+
+  // スコア記録（最高 / デイリー）
+  recordScore(score) {
+    if (score > (this.profile.bestScore || 0)) this.profile.bestScore = score;
+    if (this.daily) {
+      const k = todayKey();
+      if (!this.profile.daily || this.profile.daily.date !== k) this.profile.daily = { date: k, best: 0 };
+      if (score > this.profile.daily.best) this.profile.daily.best = score;
+    }
+  },
+
   // 現在の深度でレベルを生成（プレイヤー状態は維持）
   buildLevel() {
+    // デイリーは固定シードで地形・配置を再現（戦闘の乱数は通常通り）
+    if (this.daily) seedRng((this.dailySeed + this.floor * 101) >>> 0);
     this.dgn = genDungeon(this.floor, this.derived);
+    if (this.daily) unseedRng();
     this.projectiles = []; this.particles = []; this.floatTexts = []; this.fx = []; this.aoes = []; this.extractT = 0;
     this.runTime = 0;
     this.enemies = this.dgn.enemySpawns.map(sp => this.makeEnemy(sp.type, sp.x, sp.y));
@@ -245,6 +265,9 @@ const Game = {
 
     // 足音
     if (p._moving && p.dodgeT <= 0) { p.stepT = (p.stepT || 0) - dt; if (p.stepT <= 0) { p.stepT = 0.32; Audio2.play('step'); } }
+    // 低HP：心音（緊張演出）
+    const hpR = p.hp / p.derived.hpmax;
+    if (!p.dead && hpR < 0.3) { p.heartT = (p.heartT || 0) - dt; if (p.heartT <= 0) { p.heartT = hpR < 0.15 ? 0.6 : 0.9; Audio2.play('heart'); } }
     // 継続ダメージ（プレイヤー）
     if (p.dotT > 0) {
       p.dotT -= dt; p.dotAcc += dt;
@@ -561,6 +584,12 @@ const Game = {
         this.groundItems.push({ x: e.x + rand(-14, 14), y: e.y + rand(-14, 14), item: randomLoot(this.floor + (e.elite || e.rival ? 1 : 0), this.derived.attr.LUCK + luckBonus) });
       }
     }
+    // ライバルは自分の得物を落とす（死体漁り）
+    if (e.rival && e.rivalClass) {
+      const wmap = { sword: 'w_sword', hammer: 'w_hammer', dagger: 'w_dagger', mace: 'w_mace', bow: 'w_bow', staff: 'w_staff', spear: 'w_spear', tome: 'w_tome', flail: 'w_flail' };
+      const wid = wmap[CLASSES[e.rivalClass].weapon];
+      if (wid) this.groundItems.push({ x: e.x + rand(-16, 16), y: e.y + rand(-16, 16), item: createItem(wid, choice(['rare', 'rare', 'epic'])) });
+    }
     // スライム分裂
     if (def.split && e.maxhp > 16) {
       for (let i = 0; i < 2; i++) {
@@ -865,7 +894,7 @@ const Game = {
     for (const c of this.chests) {
       if (c.opened) continue;
       const dd = dist(p.x, p.y, c.x, c.y);
-      if (dd < c.r + CONFIG.PLAYER_R + 14 && dd < best) { best = dd; target = { key: 'c' + (c._id || (c._id = uid())), x: c.x, y: c.y, time: 1.6, kind: 'chest', obj: c, label: '開封中' }; }
+      if (dd < c.r + CONFIG.PLAYER_R + 14 && dd < best) { best = dd; target = { key: 'c' + (c._id || (c._id = uid())), x: c.x, y: c.y, time: c.vault ? 4.0 : 1.6, kind: 'chest', obj: c, label: c.vault ? '秘宝庫を開く' : '開封中' }; }
     }
     // 扉（隣接の閉扉）
     const ptx = Math.floor(p.x / T), pty = Math.floor(p.y / T);
@@ -902,10 +931,18 @@ const Game = {
   openChest(c) {
     c.opened = true;
     Audio2.play('chest');
-    this.burst(c.x, c.y, '#ffd27a', 18);
+    this.burst(c.x, c.y, c.vault ? '#fff0c0' : '#ffd27a', c.vault ? 32 : 18);
     c.contents = [];
-    for (let i = 0; i < c.loot; i++) c.contents.push(randomLoot(this.floor, this.derived.attr.LUCK));
-    if (chance(0.5)) this.run.gold += randInt(8, 30);
+    if (c.vault) {
+      const lk = this.derived.attr.LUCK + 12 + this.karmaTier() * 2;
+      for (let i = 0; i < c.loot; i++) c.contents.push(randomLoot(this.floor + 2, lk));
+      this.run.gold += randInt(40, 90) + this.floor * 10;
+      this.spawnRing(c.x, c.y, 8, 60, '#fff0c0', 0.5, 5);
+      this.toast('秘宝庫を開いた'); Audio2.play('levelup');
+    } else {
+      for (let i = 0; i < c.loot; i++) c.contents.push(randomLoot(this.floor, this.derived.attr.LUCK));
+      if (chance(0.5)) this.run.gold += randInt(8, 30);
+    }
     // 開封したらバッグ（中身）を開く
     this.openBag(c);
   },
@@ -1192,10 +1229,12 @@ const Game = {
     // 死亡時もEXPは半分だけ
     const xp = Math.round((this.run.kills * 6 + this.floor * 10) * (1 + virtueLv(this.profile, 'scholar') * 0.12));
     grantXP(this.profile, xp);
+    const score = runScore({ kills: this.run.kills, floor: this.floor, gold: 0, loot: this.run.bag.items.map(e => e.item), died: true });
+    this.recordScore(score);
     saveProfile(this.profile);
     Audio2.stopAmbient();
     Audio2.play('death');
-    UI.showResult(false, { kills: this.run.kills, gold: 0, xp, lost, loot: this.run.bag.items.map(e => e.item) });
+    UI.showResult(false, { kills: this.run.kills, gold: 0, xp, lost, loot: this.run.bag.items.map(e => e.item), score, rank: rankOf(score), best: this.profile.bestScore, daily: this.daily, dailyBest: this.profile.daily && this.profile.daily.best });
   },
 
   // 解脱の条件：報酬ポータルが「解脱門」化しているか（深層＋低業）
@@ -1243,12 +1282,14 @@ const Game = {
     this.profile.runStats.runs++;
     this.profile.runStats.kills += this.run.kills;
     this.profile.runStats.gold += this.run.gold;
+    const score = runScore({ kills: this.run.kills, floor: this.floor, gold: this.run.gold, loot: this.run.bag.items.map(e => e.item), liberated, died: false });
+    this.recordScore(score);
     saveProfile(this.profile);
     this.burst(this.player.x, this.player.y, liberated ? '#ffe6a8' : '#7fd0ff', liberated ? 44 : 30);
     Audio2.stopAmbient();
     Audio2.play(liberated ? 'levelup' : 'extract');
     if (leveled && !liberated) setTimeout(() => Audio2.play('levelup'), 500);
-    UI.showResult(true, { kills: this.run.kills, gold: this.run.gold, xp, leveled, liberated, meritGain, rebirths: this.profile.rebirths, loot: this.run.bag.items.map(e => e.item) });
+    UI.showResult(true, { kills: this.run.kills, gold: this.run.gold, xp, leveled, liberated, meritGain, rebirths: this.profile.rebirths, score, rank: rankOf(score), best: this.profile.bestScore, daily: this.daily, dailyBest: this.profile.daily && this.profile.daily.best, loot: this.run.bag.items.map(e => e.item) });
   },
 
   abandon() {

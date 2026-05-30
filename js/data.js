@@ -261,6 +261,31 @@ const ACHIEVEMENTS = {
   liberation: { name: '解脱', desc: '業を抑え深層から解脱門をくぐる' },
 };
 
+// --- 仕上げ：スコア / ランク / 称号 / デイリー ---
+function runScore(data) {
+  let s = (data.kills || 0) * 12 + (data.floor || 1) * 70 + Math.round((data.gold || 0) * 0.25);
+  for (const it of (data.loot || [])) s += Math.max(0, RARITY_ORDER.indexOf(it.rarity)) * 45;
+  if (data.liberated) s += 600;
+  if (data.died) s = Math.round(s * 0.4);
+  return Math.max(0, Math.round(s));
+}
+const RANK_TIERS = [[2400, 'S'], [1600, 'A'], [950, 'B'], [450, 'C'], [0, 'D']];
+function rankOf(score) { for (const [t, r] of RANK_TIERS) if (score >= t) return r; return 'D'; }
+
+// 称号（上から優先＝高い称号を表示）
+const TITLES = [
+  { name: '覚者', cond: p => (p.rebirths || 0) >= 3 },
+  { name: '解脱者', cond: p => (p.rebirths || 0) >= 1 },
+  { name: '鬼神', cond: p => p.runStats && p.runStats.kills >= 300 },
+  { name: '長者', cond: p => (p.gold || 0) >= 2000 || (p.achievements && p.achievements.rich) },
+  { name: '深淵を覗く者', cond: p => p.achievements && p.achievements.deep },
+  { name: '調伏者', cond: p => p.runStats && p.runStats.kills >= 80 },
+  { name: '生還者', cond: p => p.runStats && p.runStats.extracts >= 1 },
+  { name: '人の子', cond: () => true },
+];
+function currentTitle(p) { for (const t of TITLES) if (t.cond(p)) return t.name; return '人の子'; }
+function todayKey() { try { return new Date().toISOString().slice(0, 10); } catch (e) { return '1970-01-01'; } }
+
 // --- 依頼（バウンティ）生成 ---
 function generateBounties() {
   const pool = [

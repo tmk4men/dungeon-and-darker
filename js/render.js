@@ -461,9 +461,20 @@ const Render = {
 
   drawChest(ctx, c) {
     const s = this.worldToScreen(c.x, c.y);
+    const t = performance.now() / 1000;
     ctx.save(); ctx.translate(s.x, s.y);
     ctx.fillStyle = 'rgba(0,0,0,0.3)';
-    ctx.beginPath(); ctx.ellipse(0, 10, 16, 6, 0, 0, TAU); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(0, 10, c.vault ? 20 : 16, c.vault ? 8 : 6, 0, 0, TAU); ctx.fill();
+    if (c.vault) {
+      // 秘宝庫：金箔の大型・後光
+      if (!c.opened) { const g = ctx.createRadialGradient(0, -4, 2, 0, -4, 34); g.addColorStop(0, `rgba(255,230,150,${0.18 + Math.sin(t * 3) * 0.05})`); g.addColorStop(1, 'rgba(255,200,90,0)'); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, -4, 34, 0, TAU); ctx.fill(); }
+      ctx.fillStyle = c.opened ? '#6b4a28' : '#7a5320'; ctx.fillRect(-18, -12, 36, 24);
+      ctx.fillStyle = c.opened ? '#4a3018' : '#5e3f18'; ctx.fillRect(-18, -17, 36, 9);
+      ctx.fillStyle = '#f0d27a'; ctx.fillRect(-18, -12, 36, 2); ctx.fillRect(-18, 9, 36, 2);
+      ctx.fillStyle = '#ffe9a8'; ctx.fillRect(-4, -8, 8, 11);
+      if (!c.opened) { ctx.strokeStyle = hexA('#ffe9a8', 0.7 + Math.sin(t * 4) * 0.2); ctx.lineWidth = 1.6; ctx.strokeRect(-18, -17, 36, 29); }
+      ctx.restore(); return;
+    }
     ctx.fillStyle = c.opened ? '#6b4a28' : '#8a5a2c';
     ctx.fillRect(-14, -10, 28, 20);
     ctx.fillStyle = c.opened ? '#4a3018' : '#5a3a1c';

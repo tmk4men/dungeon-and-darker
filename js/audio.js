@@ -77,6 +77,7 @@ const Audio2 = {
       case 'ui': this.tone(660, 0.05, 'square', 0.08, 880); break;
       case 'select': this.tone(880, 0.06, 'triangle', 0.1); break;
       case 'step': this.noise(0.05, 0.05, 320, 'lowpass'); break;
+      case 'heart': this.tone(64, 0.13, 'sine', 0.30, 44); this.tone(56, 0.15, 'sine', 0.24, 38, 0.17); break;
     }
   },
 

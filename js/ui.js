@@ -221,11 +221,11 @@ const UI = {
         <div class="card char-card">
           <div class="avatar-frame"><canvas id="avatarCanvas" width="84" height="96" class="avatar"></canvas></div>
           <div class="char-meta">
-            <div class="char-name" style="color:${cls.color}">${cls.name}</div>
+            <div class="char-name" style="color:${cls.color}">${cls.name}<span class="title-tag">${currentTitle(p)}</span></div>
             <div class="char-sub">Lv.${p.level} ・ 得物 ${WEAPON_TYPES[cls.weapon].name}</div>
             <div class="char-flavor">${cls.blurb}</div>
             <div class="char-rec">脱出 ${p.runStats.extracts}　頓死 ${p.runStats.deaths}　調伏 ${p.runStats.kills}</div>
-            <div class="char-rec">転生 ${p.rebirths || 0}　徳 ${p.merit || 0}${(p.rebirths || 0) > 0 ? `　<span style="color:var(--gold-bright)">魔威 +${Math.round((p.rebirths || 0) * REBIRTH.enemyScale * 100)}%</span>` : ''}</div>
+            <div class="char-rec">転生 ${p.rebirths || 0}　徳 ${p.merit || 0}　最高 ${fmt(p.bestScore || 0)}${(p.rebirths || 0) > 0 ? `　<span style="color:var(--gold-bright)">魔威 +${Math.round((p.rebirths || 0) * REBIRTH.enemyScale * 100)}%</span>` : ''}</div>
           </div>
         </div>
         <div class="card">
@@ -398,6 +398,8 @@ const UI = {
         <h3>出撃</h3>
         <button class="btn big enterdungeon">ダンジョンへ潜入</button>
         <p class="muted">下り階段で深く潜るほど強敵・高レア・高報酬。</p>
+        <button class="btn big daily" style="margin-top:4px">今日の試練</button>
+        <p class="muted">全員共通の固定シード。今日の最高 ${fmt((p.daily && p.daily.date === todayKey() ? p.daily.best : 0) || 0)} ／ 自己最高 ${fmt(p.bestScore || 0)} 点</p>
       </div></div>
     </div>`;
   },
@@ -512,6 +514,7 @@ const UI = {
     }));
     // 出撃
     this.root.querySelectorAll('.enterdungeon').forEach(b => b.addEventListener('click', () => { this.hideAll(); Game.enterDungeon(); }));
+    this.root.querySelectorAll('.daily').forEach(b => b.addEventListener('click', () => { Game.startDaily(); }));
   },
 
   equipItem(uid) {
@@ -584,6 +587,13 @@ const UI = {
     const hb = document.getElementById('hpfill'), mb = document.getElementById('mpfill');
     if (hb) hb.style.width = clamp(p.hp / d.hpmax * 100, 0, 100) + '%';
     if (mb) mb.style.width = clamp(p.mp / d.mpmax * 100, 0, 100) + '%';
+    // 低HP：赤い脈動ビネット
+    const lhp = document.getElementById('lowhp');
+    if (lhp) {
+      const ratio = p.hp / d.hpmax;
+      if (!p.dead && ratio < 0.3) { const base = (0.3 - ratio) / 0.3; lhp.style.opacity = (base * (0.55 + 0.45 * Math.sin(game.time * 8))).toFixed(3); }
+      else lhp.style.opacity = '0';
+    }
     const ht = document.getElementById('hptext'), mt = document.getElementById('mptext');
     if (ht) ht.textContent = `${Math.max(0, Math.round(p.hp))}/${Math.round(d.hpmax)}`;
     if (mt) mt.textContent = `${Math.round(p.mp)}/${Math.round(d.mpmax)}`;
@@ -791,7 +801,9 @@ const UI = {
     this.panel(`<div class="screen result ${lib ? 'liberated' : win ? 'win' : 'lose'}">
       ${!win || lib ? '<div class="samsara"><span></span><span></span><span></span></div>' : ''}
       <h1 class="res-title">${lib ? '解脱' : win ? '生還' : '輪廻'}</h1>
+      ${data.rank ? `<div class="rankrow"><span class="rankbadge r-${data.rank}">${data.rank}</span><span class="scoreval">${fmt(data.score)}<small>点</small></span></div>` : ''}
       <p class="subtitle">${lib ? '業を断ち、六道の輪より抜け出た。徳を携え、新たな生へと転生する。' : win ? realmName(Game.floor) + 'より戦利品を持ち帰った。' : '持ち込んだ全てを失い、再び人間界へ還る。だが業（カルマ）は経験として残る。'}</p>
+      ${data.score != null ? `<div class="bestline">自己最高 ${fmt(data.best || 0)}${data.daily ? `　・　今日の試練 最高 ${fmt(data.dailyBest || 0)}` : ''}${data.score >= (data.best || 0) && data.score > 0 ? ' <span class="newrec">自己ベスト更新</span>' : ''}</div>` : ''}
       <div class="res-stats">
         <div><span>撃破数</span><b>${data.kills}</b></div>
         <div><span>獲得</span><b>${win ? '+' + this.gold(data.gold) : '0'}</b></div>
