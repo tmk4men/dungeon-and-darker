@@ -199,7 +199,7 @@ const UI = {
       ['重量', `${d.weight.toFixed(1)} / ${Math.round(d.weightCap)}`],
       ['会心率', Math.round(d.crit * 100) + '%'], ['会心ダメージ', Math.round(d.critDmg * 100) + '%'],
       ['回避', Math.round(d.dodge * 100) + '%'], ['吸血', Math.round(d.lifesteal * 100) + '%'],
-      ['視界', d.hasTorch ? '広い' : '狭い'],
+      ['視界', d.ownsTorch ? 'トーチ所持（潜入中に点灯）' : '狭い'],
     ].map(r => `<div class="drow"><span>${r[0]}</span><b>${r[1]}</b></div>`).join('');
     const eqNames = Object.values(p.equipment).filter(Boolean).map(it => this.rarityTag(it)).join('、') || '—';
     // 戦型（武器の型）と装束（防具セット）
@@ -313,34 +313,72 @@ const UI = {
     return `<div class="card"><h3>鍛冶屋 — 強化／エンチャント</h3>${rows}</div>`;
   },
 
+  bodyEquipSlot(p, slot) {
+    const it = p.equipment[slot];
+    const ic = (it && typeof Sprites !== 'undefined') ? (() => {
+      const u = Sprites.iconURL(it);
+      return u ? `<img class="be-ic" src="${u}" alt="" style="--rc:${RARITY[it.rarity].color}">` : '';
+    })() : '';
+    const tip = it ? itemDisplayName(it) : SLOT_NAMES[slot];
+    return `<div class="be-slot" data-slot="${slot}" title="${tip}">
+      <span class="be-lbl">${SLOT_NAMES[slot]}</span>
+      ${it ? `<div class="be-filled">${ic}<button type="button" class="btn sm unequip" data-slot="${slot}">外</button></div>`
+        : '<div class="be-empty" aria-hidden="true"></div>'}
+    </div>`;
+  },
+  bodyPotionSlot(p, i) {
+    const it = p.potions[i];
+    const ic = (it && typeof Sprites !== 'undefined') ? (() => {
+      const u = Sprites.iconURL(it);
+      return u ? `<img class="be-ic" src="${u}" alt="">` : '';
+    })() : '';
+    return `<div class="be-slot be-pot">
+      <span class="be-lbl">薬${i + 1}</span>
+      ${it ? `<div class="be-filled">${ic}<button type="button" class="btn sm potoff" data-i="${i}">外</button></div>`
+        : '<div class="be-empty" aria-hidden="true"></div>'}
+    </div>`;
+  },
   tabEquip(p, d) {
-    const slots = ['weapon', 'head', 'chest', 'hands', 'legs', 'ring', 'torch'];
-    const slotHtml = slots.map(s => {
-      const it = p.equipment[s];
-      return `<div class="eq-slot" data-slot="${s}">
-        <div class="eq-name">${SLOT_NAMES[s]}</div>
-        ${it ? `<div class="eq-item">${this.rarityTag(it)}<div class="eq-stat">${statLine(it.stats)}</div><button class="btn sm unequip" data-slot="${s}">外す</button></div>`
-          : `<div class="eq-empty">— なし —</div>`}
-      </div>`;
-    }).join('');
-    const potHtml = p.potions.map((it, i) => `<div class="eq-slot">
-      <div class="eq-name">ポーション枠${i + 1}</div>
-      ${it ? `<div class="eq-item">${this.rarityTag(it)}<button class="btn sm potoff" data-i="${i}">外す</button></div>` : `<div class="eq-empty">— なし —</div>`}
-    </div>`).join('');
-    // 装備可能な倉庫アイテム
-    const equippable = stashItems(p).filter(it => ['weapon', 'head', 'chest', 'hands', 'legs', 'ring', 'torch'].includes(it.slot));
-    const list = equippable.length ? equippable.map(it => {
-      const ok = canEquipItem(p.classId, it);
-      return `<div class="inv-row${ok ? '' : ' lockrow'}">
-        <div>${this.rarityTag(it)} <span class="slot-tag">${SLOT_NAMES[it.slot]}</span>${ok ? '' : '<span class="slot-tag lock">職業外</span>'}
-          <div class="eq-stat">${statLine(it.stats)}</div>
-          <div class="cmp-line">${ok ? compareLine(it, p.equipment[it.slot]) : '<span class="cmp down">' + CLASSES[p.classId].name + 'は扱えない武器</span>'}</div></div>
-        ${ok ? `<button class="btn sm equip" data-uid="${it.uid}">装備</button>` : '<button class="btn sm" disabled>不可</button>'}
-      </div>`;
-    }).join('') : '<div class="muted">倉庫に装備品はありません</div>';
-    return `<div class="cols">
-      <div class="col"><div class="card"><h3>装備中（ダンジョンへ持ち込む＝死亡でロスト）</h3>${slotHtml}${potHtml}</div></div>
-      <div class="col"><div class="card"><h3>倉庫の装備品</h3>${list}</div></div>
+    const body = `<div class="body-equip">
+      <div class="be-silhouette" aria-hidden="true"></div>
+      <div class="be-head">${this.bodyEquipSlot(p, 'head')}</div>
+      <div class="be-mid">
+        <div class="be-side">${this.bodyEquipSlot(p, 'weapon')}</div>
+        <div class="be-core">
+          ${this.bodyEquipSlot(p, 'chest')}
+          ${this.bodyEquipSlot(p, 'hands')}
+          ${this.bodyEquipSlot(p, 'legs')}
+        </div>
+      </div>
+      <div class="be-acc">
+        ${this.bodyEquipSlot(p, 'ring')}
+        ${this.bodyEquipSlot(p, 'torch')}
+      </div>
+      <div class="be-pots">${p.potions.map((_, i) => this.bodyPotionSlot(p, i)).join('')}</div>
+    </div>`;
+    const stash = stashItems(p);
+    const slotOrder = { weapon: 0, head: 1, chest: 2, hands: 3, legs: 4, ring: 5, torch: 6, potion: 7, treasure: 8 };
+    const sorted = stash.slice().sort((a, b) => (slotOrder[a.slot] ?? 9) - (slotOrder[b.slot] ?? 9));
+    const list = sorted.length ? sorted.map(it => {
+      const eq = ['weapon', 'head', 'chest', 'hands', 'legs', 'ring', 'torch'].includes(it.slot);
+      const pot = it.slot === 'potion';
+      const ok = !eq || canEquipItem(p.classId, it);
+      let act = '';
+      if (eq) act = ok ? `<button class="btn sm equip" data-uid="${it.uid}">装備</button>` : '<button class="btn sm" disabled>不可</button>';
+      else if (pot) act = `<button class="btn sm topotion" data-uid="${it.uid}">薬枠へ</button>`;
+      return `<div class="inv-row${eq && !ok ? ' lockrow' : ''}">
+        <div>${this.rarityTag(it)} <span class="slot-tag">${SLOT_NAMES[it.slot] || (pot ? 'ポーション' : it.slot)}</span>
+          ${eq && !ok ? '<span class="slot-tag lock">職業外</span>' : ''}
+          ${eq && ok ? `<div class="cmp-line">${compareLine(it, p.equipment[it.slot])}</div>` : ''}
+          ${eq ? `<div class="eq-stat">${statLine(it.stats)}</div>` : ''}</div>
+        ${act}</div>`;
+    }).join('') : '<div class="muted">倉庫にアイテムはありません</div>';
+    return `<div class="cols equip-cols">
+      <div class="col"><div class="card"><h3>装備</h3>
+        <p class="muted be-note">身につけるもの。死亡で持ち込み品はロスト。</p>
+        ${body}</div></div>
+      <div class="col"><div class="card equip-inv-card"><h3>所持品</h3>
+        <div class="inv-scroll">${list}</div></div></div>
     </div>`;
   },
 
@@ -611,10 +649,16 @@ const UI = {
     }
     const tb = document.getElementById('torchbtn');
     if (tb) {
-      const hasTorch = game.profile && game.profile.equipment && game.profile.equipment.torch;
-      tb.style.display = hasTorch ? 'flex' : 'none';
+      const ownsTorch = game.profile && game.profile.equipment && game.profile.equipment.torch;
+      tb.style.display = ownsTorch ? 'flex' : 'none';
       tb.classList.toggle('thrown', !!game.torchThrown);
-      const st = tb.querySelector('.torch-st'); if (st) st.textContent = game.torchThrown ? '投擲中' : '投げる';
+      tb.classList.toggle('lit', !!game.torchLit && !game.torchThrown);
+      const st = tb.querySelector('.torch-st');
+      if (st) {
+        if (game.torchThrown) st.textContent = '設置中';
+        else if (game.torchLit) st.textContent = '点灯中';
+        else st.textContent = '長押しで置く';
+      }
     }
     const ib = document.getElementById('interactbtn');
     if (ib) {

@@ -127,12 +127,14 @@ const Game = {
       potions: this.profile.potions.map(p => p ? { ...p } : null),
     };
 
+    this.torchLit = false;
     this.buildLevel();
 
     this.state = 'dungeon';
     Input.enabled = true; Input.reset();
     Input.fireCallback = (ang) => this.onFire(ang);
     Input.aimChange = (ang) => { this.player.facing = ang; };
+    this.applyTorchState();
     UI.showHUD();
     UI.buildSkillBar(this);
   },
@@ -165,7 +167,8 @@ const Game = {
     this.altars = this.dgn.altars.slice();
     this.stairs = this.dgn.stairs;
     this.nearAltar = null; this.nearStairs = null; this.channelTarget = null; this.interactHeld = false;
-    this.thrownTorch = null; this.torchThrown = false; // 階移動で松明は手に戻る
+    this.thrownTorch = null; this.torchThrown = false; this.torchLit = false; // 階移動で松明は手に戻る
+    if (this.player) this.applyTorchState();
     this.player.x = this.dgn.startX; this.player.y = this.dgn.startY;
     this.player.dodgeT = 0; this.player.invuln = 0.6; // 到着直後の保護
     this.transitionT = 1.5; this.transitionName = realmName(this.floor);
@@ -964,20 +967,37 @@ const Game = {
 
   updatePickups() { /* 自動拾得は廃止。バッグ画面で回収する */ },
 
-  // ---------- 松明（トーチ）を投げて足元以外を照らす ----------
-  throwTorch() {
+  // ---------- 松明（トーチ）：タップで手に持って点灯／長押しでその場に置く ----------
+  applyTorchState() {
+    if (!this.player || !this.player.derived) return;
+    const lit = !!this.profile.equipment.torch && this.torchLit && !this.torchThrown;
+    this.player.derived.hasTorch = lit;
+    this.player.derived.vision = lit ? CONFIG.TORCH_VISION : CONFIG.BASE_VISION;
+  },
+  toggleTorch() {
+    if (this.state !== 'dungeon' || this.paused) return;
+    if (!this.profile.equipment.torch) { this.toast('松明を持っていない'); return; }
+    if (this.torchThrown) { this.toast('松明は足元に置いてある'); return; }
+    this.torchLit = !this.torchLit;
+    this.applyTorchState();
+    Audio2.play('ui');
+    UI.updateHUD(this);
+  },
+  dropTorch() {
     if (this.state !== 'dungeon' || this.paused) return;
     const p = this.player;
-    if (!this.profile.equipment.torch) { this.toast('松明を装備していない'); return; }
-    if (this.torchThrown) { this.toast('松明は投げている'); return; }
+    if (!this.profile.equipment.torch) return;
+    if (this.torchThrown) { this.toast('松明は既に置いてある'); return; }
+    this.torchLit = false;
     this.torchThrown = true;
-    const ang = p.facing;
     this.thrownTorch = {
-      x: p.x, y: p.y, vx: Math.cos(ang) * 480, vy: Math.sin(ang) * 480,
-      flying: true, t: 0, pickCd: 0.7,
+      x: p.x, y: p.y, vx: 0, vy: 0,
+      flying: false, t: 0, pickCd: 0.55,
       radius: CONFIG.TORCH_VISION * CONFIG.TILE * 0.95, flick: rand(0, TAU),
     };
-    Audio2.play('swing');
+    this.applyTorchState();
+    this.burst(p.x, p.y, '#ffae5b', 10);
+    Audio2.play('step');
     UI.updateHUD(this);
   },
   updateThrownTorch(dt) {
@@ -1001,6 +1021,8 @@ const Game = {
   },
   pickupTorch() {
     this.torchThrown = false; this.thrownTorch = null;
+    this.torchLit = false;
+    this.applyTorchState();
     Audio2.play('ui');
     UI.updateHUD(this);
   },
@@ -1049,6 +1071,7 @@ const Game = {
     if (prev && !this.bagAdd(prev)) this.groundItems.push({ x: this.player.x + rand(-16, 16), y: this.player.y, item: prev });
     this.derived = computeDerived(this.profile);
     this.player.derived = this.derived;
+    this.applyTorchState();
     this.player.hp = Math.min(this.player.hp, this.derived.hpmax);
     Audio2.play('select');
   },
@@ -1056,7 +1079,10 @@ const Game = {
     const it = this.profile.equipment[slot]; if (!it) return;
     if (!this.bagAdd(it)) { this.toast('バッグに空きがない（整理が必要）'); return; }
     this.profile.equipment[slot] = null;
-    this.derived = computeDerived(this.profile); this.player.derived = this.derived;
+    this.derived = computeDerived(this.profile);
+    this.player.derived = this.derived;
+    if (slot === 'torch') { this.torchLit = false; this.torchThrown = false; this.thrownTorch = null; }
+    this.applyTorchState();
     Audio2.play('ui');
   },
   // バッグ内移動・回転

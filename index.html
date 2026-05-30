@@ -49,8 +49,8 @@
       <div id="karmainfo" class="karmainfo"></div>
       <!-- 左上：バッグ -->
       <button id="bagbtn" class="bagbtn"><span class="bag-ic">袋</span><span class="bag-ct">0/20</span></button>
-      <!-- 左上：松明を投げる -->
-      <button id="torchbtn" class="torchbtn"><span class="torch-ic">松明</span><span class="torch-st">投げる</span></button>
+      <!-- 右下：松明（タップで点灯／長押しで設置） -->
+      <button id="torchbtn" class="torchbtn" type="button"><span class="torch-ic">松明</span><span class="torch-st">長押しで置く</span></button>
       <!-- 中央：脱出ゲージ -->
       <div id="extract"></div>
       <!-- 右下：スキル＆ポーション -->
@@ -96,8 +96,27 @@
     ib.addEventListener('pointerleave', () => Game.onInteractUp());
     // バッグ（持ち物）
     document.getElementById('bagbtn').addEventListener('click', (e) => { e.stopPropagation(); Game.openBag(); });
-    // 松明を投げる（向いている方向へ）
-    document.getElementById('torchbtn').addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); Game.throwTorch(); });
+    // 松明：タップで手に持って点灯、長押しでその場に置く
+    (function () {
+      const tb = document.getElementById('torchbtn');
+      let holdT = null, longDone = false;
+      const clearHold = () => { if (holdT) { clearTimeout(holdT); holdT = null; } };
+      tb.addEventListener('pointerdown', (e) => {
+        e.preventDefault(); e.stopPropagation();
+        longDone = false;
+        clearHold();
+        holdT = setTimeout(() => { longDone = true; Game.dropTorch(); clearHold(); }, 520);
+      });
+      const end = (e) => {
+        e.preventDefault(); e.stopPropagation();
+        clearHold();
+        if (!longDone) Game.toggleTorch();
+        longDone = false;
+      };
+      tb.addEventListener('pointerup', end);
+      tb.addEventListener('pointercancel', () => { clearHold(); longDone = false; });
+      tb.addEventListener('pointerleave', () => { clearHold(); longDone = false; });
+    })();
     // オーディオはユーザー操作で解放（モバイル対策）
     const unlock = () => { Audio2.init(); Audio2.resume(); window.removeEventListener('pointerdown', unlock); window.removeEventListener('keydown', unlock); };
     window.addEventListener('pointerdown', unlock);

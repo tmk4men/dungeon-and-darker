@@ -92,9 +92,10 @@ function computeDerived(p) {
     healPow: 1 + attr.WIS * 0.05,
     magicResist: clamp(attr.WIS * 0.006, 0, 0.5),
     lifesteal: equip.lifesteal || 0,
-    hasTorch: !!p.equipment.torch,
+    ownsTorch: !!p.equipment.torch,
+    hasTorch: false, // ダンジョン中は Game.applyTorchState() で上書き
   };
-  d.vision = (d.hasTorch ? CONFIG.TORCH_VISION : CONFIG.BASE_VISION);
+  d.vision = CONFIG.BASE_VISION;
   return d;
 }
 
