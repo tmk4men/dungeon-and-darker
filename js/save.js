@@ -70,7 +70,7 @@ function computeDerived(p) {
     patkFlat: (equip.patk || 0),
     matkFlat: (equip.matk || 0),
     defense: Math.round(attr.VIG * 0.3 + (equip.defense || 0)),
-    speed: 158 * (1 + attr.AGI * 0.02) * (1 - encPenalty),
+    speed: 130 * (1 + attr.AGI * 0.02) * (1 - encPenalty),
     atkSpeedMult: 1 / (1 + attr.AGI * 0.022),
     crit: clamp((wtype.crit || 0) + attr.DEX * 0.004 + attr.LUCK * 0.003 + (equip.crit || 0), 0, 0.75),
     critDmg: 1.5 + attr.LUCK * 0.02,
