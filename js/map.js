@@ -1,7 +1,7 @@
 // ============================================================
 // map.js — ダンジョン生成（部屋グリッド＋通路＋扉＋光源＋湧き）
 // ============================================================
-const T_WALL = 0, T_FLOOR = 1, T_DOOR = 2, T_DOOROPEN = 3;
+const T_WALL = 0, T_FLOOR = 1, T_DOOR = 2, T_DOOROPEN = 3, T_ROCK = 4;
 
 // バイオーム（見た目テーマ）
 const THEMES = {
@@ -51,6 +51,24 @@ function genDungeon(floor, derived) {
       };
       grid[cy * cols + cx] = room;
       rooms.push(room);
+    }
+  }
+
+  // --- 部屋の形に変化を出す（角を削る／縁に窪み）---
+  for (const r of rooms) {
+    if (r.w < 6 || r.h < 6) continue;
+    // 角を斜めに落とす（箱っぽさを消す）
+    const corners = [[r.x, r.y, 1, 1], [r.x + r.w - 1, r.y, -1, 1], [r.x, r.y + r.h - 1, 1, -1], [r.x + r.w - 1, r.y + r.h - 1, -1, -1]];
+    for (const [cxn, cyn, sx, sy] of corners) {
+      if (!chance(0.55)) continue;
+      set(cxn, cyn, T_WALL);
+      if (chance(0.4)) { set(cxn + sx, cyn, T_WALL); set(cxn, cyn + sy, T_WALL); } // 大きめのベベル
+    }
+    // 縁の小さな窪み（アルコーブの逆＝壁が出っ張る）
+    if (chance(0.4)) {
+      const horiz = chance(0.5);
+      if (horiz) { const x = r.x + randInt(2, r.w - 3), y = chance(0.5) ? r.y : r.y + r.h - 1; set(x, y, T_WALL); set(x + 1, y, T_WALL); }
+      else { const y = r.y + randInt(2, r.h - 3), x = chance(0.5) ? r.x : r.x + r.w - 1; set(x, y, T_WALL); set(x, y + 1, T_WALL); }
     }
   }
 
@@ -213,11 +231,37 @@ function genDungeon(floor, derived) {
     if (cand[0]) enemySpawns.push({ type: 'rival', x: (cand[0].ccx + 0.5) * CONFIG.TILE, y: (cand[0].ccy + 0.5) * CONFIG.TILE });
   }
 
+  // --- 障害物（岩・柱）：部屋を単調にしない。歩行と射線（移動）を遮るが視界は通す ---
+  const rocks = [];
+  const reserved = new Set();
+  const keyOf = (tx, ty) => tx + ',' + ty;
+  const reserveAt = (wx, wy) => reserved.add(keyOf(Math.floor(wx / CONFIG.TILE), Math.floor(wy / CONFIG.TILE)));
+  for (const s of enemySpawns) reserveAt(s.x, s.y);
+  for (const c of chests) reserveAt(c.x, c.y);
+  for (const g of groundItems) reserveAt(g.x, g.y);
+  for (const a of altars) reserveAt(a.x, a.y);
+  for (const pt of portals) reserveAt(pt.x, pt.y);
+  reserveAt(stairs.x, stairs.y);
+  for (const r of rooms) {
+    if (r === start) continue;
+    const n = randInt(0, Math.max(1, Math.round(r.w * r.h / 24)));
+    for (let i = 0; i < n; i++) {
+      const tx = r.x + randInt(1, r.w - 2), ty = r.y + randInt(1, r.h - 2);
+      if (Math.abs(tx - r.ccx) <= 1 && Math.abs(ty - r.ccy) <= 1) continue; // 中央（通路合流）は空ける
+      if (reserved.has(keyOf(tx, ty))) continue;
+      if (get(tx, ty) !== T_FLOOR) continue;
+      if (get(tx - 1, ty) === T_DOOR || get(tx + 1, ty) === T_DOOR || get(tx, ty - 1) === T_DOOR || get(tx, ty + 1) === T_DOOR) continue; // 出入口を塞がない
+      set(tx, ty, T_ROCK);
+      reserved.add(keyOf(tx, ty));
+      rocks.push({ tx, ty, x: (tx + 0.5) * CONFIG.TILE, y: (ty + 0.5) * CONFIG.TILE, variant: randInt(0, 2), big: chance(0.25) });
+    }
+  }
+
   const themeKey = pickTheme(floor);
   const theme = THEMES[themeKey];
 
   return {
-    floor, W, H, tiles, rooms, lights, portal, portals, traps, altars, stairs, theme, themeKey,
+    floor, W, H, tiles, rooms, lights, portal, portals, traps, altars, stairs, theme, themeKey, rocks,
     get, set,
     startX: (start.ccx + 0.5) * CONFIG.TILE,
     startY: (start.ccy + 0.5) * CONFIG.TILE,
@@ -247,7 +291,7 @@ function floorEnemyPool(floor) {
 function isSolidAt(dgn, px, py) {
   const tx = Math.floor(px / CONFIG.TILE), ty = Math.floor(py / CONFIG.TILE);
   const t = dgn.get(tx, ty);
-  return t === T_WALL || t === T_DOOR;
+  return t === T_WALL || t === T_DOOR || t === T_ROCK;
 }
 // 視界を遮るか（壁 or 閉扉）
 function isOpaqueAt(dgn, tx, ty) {

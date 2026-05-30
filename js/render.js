@@ -124,12 +124,17 @@ const Render = {
       }
     }
 
-    // --- エンティティ（y順） ---
+    // --- エンティティ（y順。岩も混ぜて前後関係を自然に） ---
     const ents = [];
     for (const e of game.enemies) if (!e.dead) ents.push(e);
     ents.push(game.player);
+    if (dgn.rocks) for (const rk of dgn.rocks) ents.push({ rock: rk, y: rk.y });
     ents.sort((a, b) => a.y - b.y);
-    for (const e of ents) (e === game.player) ? this.drawPlayer(ctx, e) : this.drawEnemy(ctx, e, game);
+    for (const e of ents) {
+      if (e.rock) this.drawRock(ctx, e.rock, dgn.theme);
+      else if (e === game.player) this.drawPlayer(ctx, e);
+      else this.drawEnemy(ctx, e, game);
+    }
 
     // --- ボスAoE予告（地面に詠唱円） ---
     if (game.aoes) for (const a of game.aoes) this.drawAoe(ctx, a);
@@ -206,6 +211,41 @@ const Render = {
     ctx.beginPath(); ctx.arc(0, 0, 13, -Math.PI / 2, -Math.PI / 2 + TAU * clamp(ch.prog, 0, 1)); ctx.stroke();
     ctx.fillStyle = '#ffe6a8'; ctx.font = 'bold 10px "Shippori Mincho B1", serif'; ctx.textAlign = 'center';
     ctx.fillText(ch.label, 0, -20);
+    ctx.restore();
+  },
+
+  // 岩・柱（部屋の障害物）。テーマ accent で色味を変える
+  drawRock(ctx, rk, theme) {
+    const s = this.worldToScreen(rk.x, rk.y), T = CONFIG.TILE;
+    const base = (theme && theme.accent) || '#6a6a86';
+    const r = T * (rk.big ? 0.5 : 0.4);
+    ctx.save();
+    ctx.translate(s.x, s.y);
+    // 接地影
+    ctx.fillStyle = 'rgba(0,0,0,0.42)';
+    ctx.beginPath(); ctx.ellipse(0, r * 0.62, r * 1.05, r * 0.42, 0, 0, TAU); ctx.fill();
+    ctx.translate(0, -r * 0.18);
+    // 岩塊（バリアントで多角形を変える）
+    const shapes = [
+      [[-0.9, 0.25], [-0.62, -0.72], [0.08, -0.98], [0.82, -0.55], [0.96, 0.28], [0.42, 0.74], [-0.5, 0.72]],
+      [[-0.96, 0.12], [-0.42, -0.86], [0.5, -0.8], [0.96, -0.04], [0.72, 0.72], [-0.3, 0.86], [-0.86, 0.6]],
+      [[-0.82, 0.38], [-0.86, -0.4], [-0.1, -0.92], [0.7, -0.62], [0.92, 0.12], [0.56, 0.78], [-0.36, 0.82]],
+    ];
+    const pts = shapes[rk.variant % 3];
+    ctx.beginPath();
+    pts.forEach((p, i) => { const x = p[0] * r, y = p[1] * r; i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+    ctx.closePath();
+    const g = ctx.createLinearGradient(0, -r, 0, r);
+    g.addColorStop(0, shade(base, 0.3)); g.addColorStop(0.55, base); g.addColorStop(1, shade(base, -0.45));
+    ctx.fillStyle = g; ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,0.55)'; ctx.lineWidth = 1.5; ctx.stroke();
+    // 上面ハイライト
+    ctx.fillStyle = hexA(shade(base, 0.42), 0.55);
+    ctx.beginPath();
+    ctx.moveTo(-0.12 * r, -0.66 * r); ctx.lineTo(0.42 * r, -0.46 * r); ctx.lineTo(0.12 * r, 0.02 * r); ctx.closePath(); ctx.fill();
+    // 罅（ひび）
+    ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(-0.1 * r, -0.5 * r); ctx.lineTo(0.05 * r, 0.1 * r); ctx.lineTo(-0.2 * r, 0.55 * r); ctx.stroke();
     ctx.restore();
   },
 
