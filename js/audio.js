@@ -76,6 +76,7 @@ const Audio2 = {
       case 'zone': this.tone(110, 0.6, 'sawtooth', 0.2, 70); this.noise(0.5, 0.12, 300); break;
       case 'ui': this.tone(660, 0.05, 'square', 0.08, 880); break;
       case 'select': this.tone(880, 0.06, 'triangle', 0.1); break;
+      case 'step': this.noise(0.05, 0.05, 320, 'lowpass'); break;
     }
   },
 

@@ -60,11 +60,19 @@ const Game = {
     Input.enabled = false; Input.reset();
     Audio2.stopAmbient();
     if (this.profile) {
-      // 旧セーブの移行
+      // 破損/旧セーブの救済
       if (!CLASSES[this.profile.classId]) {
         this.profile.classId = REMOVED_CLASS_MAP[this.profile.classId] || 'fighter';
         this.profile.loadout = [...CLASSES[this.profile.classId].skills];
       }
+      const cls = CLASSES[this.profile.classId];
+      if (!this.profile.baseAttrs) this.profile.baseAttrs = { ...cls.base };
+      if (!this.profile.equipment) this.profile.equipment = { weapon: null, head: null, chest: null, hands: null, legs: null, ring: null, torch: null };
+      if (!Array.isArray(this.profile.potions)) this.profile.potions = new Array(CONFIG.POTION_SLOTS).fill(null);
+      if (!Array.isArray(this.profile.stash)) this.profile.stash = [];
+      if (!this.profile.runStats) this.profile.runStats = { runs: 0, extracts: 0, deaths: 0, kills: 0, gold: 0, elites: 0 };
+      if (typeof this.profile.gold !== 'number') this.profile.gold = 0;
+      if (!this.profile.level) { this.profile.level = 1; this.profile.xp = 0; this.profile.points = 0; }
       if (!this.profile.achievements) this.profile.achievements = {};
       if (!this.profile.bounties) this.profile.bounties = [];
       if (!this.profile.runStats.elites) this.profile.runStats.elites = 0;
@@ -73,8 +81,13 @@ const Game = {
         const need = 3 - this.profile.bounties.length;
         this.profile.bounties.push(...generateBounties().slice(0, need));
       }
-      this.derived = computeDerived(this.profile);
-      saveProfile(this.profile);
+      try {
+        this.derived = computeDerived(this.profile);
+        saveProfile(this.profile);
+      } catch (e) {
+        console.warn('セーブ破損のためリセット', e);
+        deleteProfile(); this.profile = null;
+      }
     }
     UI.showTown(this.profile ? (tab || 'status') : 'class');
   },
@@ -103,7 +116,6 @@ const Game = {
     Input.enabled = true; Input.reset();
     Input.fireCallback = (ang) => this.onFire(ang);
     Input.aimChange = (ang) => { this.player.facing = ang; };
-    Input.dodgeCallback = () => this.dodge();
     UI.showHUD();
     UI.buildSkillBar(this);
     this.toast(realmName(this.floor) + 'へ踏み入る — 生きて還れ');
@@ -120,7 +132,7 @@ const Game = {
     this.traps = this.dgn.traps.slice();
     this.altars = this.dgn.altars.slice();
     this.stairs = this.dgn.stairs;
-    this.nearAltar = null; this.nearStairs = null;
+    this.nearAltar = null; this.nearStairs = null; this.channelTarget = null; this.interactHeld = false;
     this.player.x = this.dgn.startX; this.player.y = this.dgn.startY;
     this.player.dodgeT = 0; this.player.invuln = 0.6; // 到着直後の保護
     this.transitionT = 1.5; this.transitionName = realmName(this.floor);
@@ -221,6 +233,8 @@ const Game = {
       } else p._moving = false;
     }
 
+    // 足音
+    if (p._moving && p.dodgeT <= 0) { p.stepT = (p.stepT || 0) - dt; if (p.stepT <= 0) { p.stepT = 0.32; Audio2.play('step'); } }
     // 継続ダメージ（プレイヤー）
     if (p.dotT > 0) {
       p.dotT -= dt; p.dotAcc += dt;
@@ -286,10 +300,11 @@ const Game = {
     if (k['1']) this.selectSkill(0);
     if (k['2']) this.selectSkill(1);
     if (k['0'] || k['`']) this.selectSkill(-1);
-    if (k['shift']) { this.dodge(); }
     if (k['q']) { this.usePotion(0); k['q'] = false; }
     if (k['e']) { this.usePotion(1); k['e'] = false; }
-    if (k['f']) { this.interact(); k['f'] = false; }
+    // 開ける/祈る/降りる：押した瞬間＋押している間
+    if (k['f'] && !this._fDown) { this._fDown = true; this.onInteractDown(); }
+    if (!k['f'] && this._fDown) { this._fDown = false; this.onInteractUp(); }
     // スペース or 左クリックでマウス方向に発射
     if (k[' ']) { k[' '] = false; const ang = angleOf(Input.mouse.x - CONFIG.VIEW_W / 2, Input.mouse.y - CONFIG.VIEW_H / 2); this.player.facing = ang; this.onFire(ang); }
   },
@@ -821,14 +836,18 @@ const Game = {
         if (dd < T * 1.05 && dd < best) { best = dd; target = { key: 'd' + tx + ',' + ty, x: cx, y: cy, time: 0.9, kind: 'door', tx, ty, label: '開錠中' }; }
       }
     }
-    if (!target) { this.channel = null; return; }
+    this.channelTarget = target;
+    // 対象から離れたらキャンセル
+    if (!target) { this.channel = null; this.interactHeld = false; return; }
+    // ボタンを一度タッチで開錠開始 → あとは自動で進む（離れるまで）
+    if (!this.interactHeld) { this.channel = null; return; }
     if (!this.channel || this.channel.key !== target.key) this.channel = { key: target.key, prog: 0, time: target.time, kind: target.kind, label: target.label };
     this.channel.x = target.x; this.channel.y = target.y;
     this.channel.prog += dt / this.channel.time;
     if (this.channel.prog >= 1) {
       if (target.kind === 'chest') this.openChest(target.obj);
       else this.openDoor(target.tx, target.ty);
-      this.channel = null;
+      this.channel = null; this.interactHeld = false;
     }
   },
 
@@ -867,6 +886,7 @@ const Game = {
         if (g.item.rarity === 'legendary') this.unlockAch('legendary');
         const col = RARITY[g.item.rarity] ? RARITY[g.item.rarity].color : '#fff';
         this.addFloat(g.x, g.y - 14, itemDisplayName(g.item), col, 13);
+        if (RARITY_ORDER.indexOf(g.item.rarity) >= 3) { this.spawnRing(g.x, g.y, 4, 32, col, 0.5, 3); this.burst(g.x, g.y, col, 8); }
         Audio2.play(RARITY_ORDER.indexOf(g.item.rarity) >= 3 ? 'coin' : 'ui');
         this.groundItems.splice(i, 1);
       }
@@ -901,10 +921,11 @@ const Game = {
     if (this.stairs && dist(p.x, p.y, this.stairs.x, this.stairs.y) < this.stairs.r + CONFIG.PLAYER_R + 8) this.nearStairs = this.stairs;
   },
 
-  interact() {
+  // インタラクトボタン：押下（階段=降りる／祭壇=作法／扉・宝箱=押している間で開ける）
+  onInteractDown() {
     if (this.nearStairs) { this.descend(); return; }
     const a = this.nearAltar;
-    if (!a || a.used) return;
+    if (!(a && !a.used)) { this.interactHeld = true; return; }
     const p = this.player;
     if (a.type === 'sacrifice') {
       const cost = Math.floor(p.hp * 0.25);
@@ -942,6 +963,7 @@ const Game = {
       }
     }
   },
+  onInteractUp() { /* ワンタップ開錠：離すではなく対象から離れた時にキャンセル */ },
 
   // ---------- トラップ ----------
   updateTraps(dt) {
@@ -978,7 +1000,7 @@ const Game = {
     this.zone = {
       cx: dgn.portal.x, cy: dgn.portal.y,
       r: diag, r0: diag, minR: 260,
-      grace: 50, shrinkDur: 80, dmg: 8 + this.floor * 4,
+      grace: 62, shrinkDur: 84, dmg: 8 + this.floor * 4,
       warned: false,
     };
   },

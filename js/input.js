@@ -51,10 +51,6 @@ const Input = {
     const isLeft = p.x < CONFIG.VIEW_W * 0.46;
     if (isLeft && this.left.id === null) {
       this.left.id = e.pointerId; this.left.ox = p.x; this.left.oy = p.y; this.left.dx = 0; this.left.dy = 0;
-      // ダブルタップで回避
-      const now = performance.now();
-      if (now - this._lastLeftDown < 280 && this.dodgeCallback) this.dodgeCallback();
-      this._lastLeftDown = now;
     } else if (!isLeft && this.right.id === null) {
       this.right.id = e.pointerId; this.right.ox = p.x; this.right.oy = p.y; this.right.dx = 0; this.right.dy = 0;
       this.aimVec.active = true;

@@ -333,7 +333,7 @@ const UI = {
         <h3>出撃</h3>
         <button class="btn big enterdungeon">ダンジョンへ潜入</button>
         <p class="muted" style="margin-top:10px">ひとつながりのダンジョンです。各階にある<b>「下り階段」</b>で深く潜るほど、敵が強くなり戦利品のレア度とゴールドが増えます。脱出ポータルからはいつでも帰還でき、深く潜ってから帰るほど高リスク高報酬です。</p>
-        <p class="muted" style="margin-top:8px">操作：左スティック＝移動（<b>二度押しで回避</b>）／右スティック＝攻撃・狙う／扉・宝箱は近づくと開く。</p>
+        <p class="muted" style="margin-top:8px">操作：左スティック＝移動／右スティック＝攻撃・狙う／扉・宝箱は近づいて「開ける」ボタン（離れると中断）。</p>
       </div></div>
     </div>`;
   },
@@ -502,8 +502,10 @@ const UI = {
     if (db) db.classList.toggle('cool', p.dodgeCd > 0);
     const ib = document.getElementById('interactbtn');
     if (ib) {
-      if (game.nearStairs) { ib.style.display = 'block'; ib.textContent = '降りる'; }
-      else if (game.nearAltar) { ib.style.display = 'block'; ib.textContent = (game.nearAltar.type === 'sacrifice' ? '捧げる' : '祈る'); }
+      const channeling = game.channel && game.channel.kind;
+      if (game.nearStairs) { ib.style.display = 'block'; ib.textContent = '降りる'; ib.classList.remove('go'); }
+      else if (game.nearAltar) { ib.style.display = 'block'; ib.textContent = (game.nearAltar.type === 'sacrifice' ? '捧げる' : '祈る'); ib.classList.remove('go'); }
+      else if (game.channelTarget) { ib.style.display = 'block'; ib.textContent = channeling ? '開錠中…' : (game.channelTarget.kind === 'chest' ? '宝箱を開ける' : '扉を開ける'); ib.classList.toggle('go', !!channeling); }
       else ib.style.display = 'none';
     }
     const ki = document.getElementById('karmainfo');

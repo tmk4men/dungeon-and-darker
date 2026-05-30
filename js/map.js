@@ -59,12 +59,13 @@ function genDungeon(floor, derived) {
     const hFirst = chance(0.5);
     const stepX = ax < bx ? 1 : -1, stepY = ay < by ? 1 : -1;
     const carveCell = (x, y) => { if (get(x, y) === T_WALL) set(x, y, T_FLOOR); };
+    // 通路は幅1（扉が1マスに収まる）
     if (hFirst) {
-      for (let x = ax; x !== bx + stepX; x += stepX) { carveCell(x, ay); carveCell(x, ay + 1); }
-      for (let y = ay; y !== by + stepY; y += stepY) { carveCell(bx, y); carveCell(bx + 1, y); }
+      for (let x = ax; x !== bx + stepX; x += stepX) carveCell(x, ay);
+      for (let y = ay; y !== by + stepY; y += stepY) carveCell(bx, y);
     } else {
-      for (let y = ay; y !== by + stepY; y += stepY) { carveCell(ax, y); carveCell(ax + 1, y); }
-      for (let x = ax; x !== bx + stepX; x += stepX) { carveCell(x, by); carveCell(x, by + 1); }
+      for (let y = ay; y !== by + stepY; y += stepY) carveCell(ax, y);
+      for (let x = ax; x !== bx + stepX; x += stepX) carveCell(x, by);
     }
   };
 
@@ -86,13 +87,19 @@ function genDungeon(floor, derived) {
     }
   }
 
-  // --- 扉：各部屋の外周リングにできた床＝出入口 → 扉に ---
+  // --- 扉：外周リングの「1マス幅の通り抜け口」だけを扉に（並走通路は開放のまま）---
   for (const r of rooms) {
     for (let x = r.x - 1; x <= r.x + r.w; x++) {
       for (let y = r.y - 1; y <= r.y + r.h; y++) {
-        const onRing = (x === r.x - 1 || x === r.x + r.w || y === r.y - 1 || y === r.y + r.h);
-        const inside = (x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h);
-        if (onRing && !inside && get(x, y) === T_FLOOR) set(x, y, T_DOOR);
+        if (get(x, y) !== T_FLOOR) continue;
+        const onTop = (y === r.y - 1), onBot = (y === r.y + r.h), onLeft = (x === r.x - 1), onRight = (x === r.x + r.w);
+        const edges = (onTop ? 1 : 0) + (onBot ? 1 : 0) + (onLeft ? 1 : 0) + (onRight ? 1 : 0);
+        if (edges !== 1) continue; // 角や非リングは除外
+        // 通り抜け方向に直交する両隣が壁＝1マスの出入口
+        const pinch = (onTop || onBot)
+          ? (get(x - 1, y) === T_WALL && get(x + 1, y) === T_WALL)
+          : (get(x, y - 1) === T_WALL && get(x, y + 1) === T_WALL);
+        if (pinch) set(x, y, T_DOOR);
       }
     }
   }

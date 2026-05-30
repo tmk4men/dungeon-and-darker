@@ -75,8 +75,12 @@
     document.getElementById('abandon').addEventListener('click', () => {
       if (Game.state === 'dungeon') UI.confirm('退いて伽藍へ還りますか？\n持ち込んだ装備と道中の戦利品は全て失われます。', () => Game.abandon(), '退く', 'やめる');
     });
-    // 祭壇インタラクト
-    document.getElementById('interactbtn').addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); Game.interact(); });
+    // インタラクト（押下＝降りる/作法/開ける開始、離す＝開錠中断）
+    const ib = document.getElementById('interactbtn');
+    ib.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); Game.onInteractDown(); });
+    ib.addEventListener('pointerup', (e) => { e.preventDefault(); Game.onInteractUp(); });
+    ib.addEventListener('pointercancel', () => Game.onInteractUp());
+    ib.addEventListener('pointerleave', () => Game.onInteractUp());
     // ミュート
     document.getElementById('mute').addEventListener('click', (e) => {
       const m = Audio2.toggleMute();

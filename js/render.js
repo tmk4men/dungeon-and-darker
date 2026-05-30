@@ -448,6 +448,19 @@ const Render = {
     if (e.attackT > 0) { const k = Math.sin((1 - e.attackT / 0.18) * Math.PI) * 7; lx = Math.cos(e.facing) * k; ly = Math.sin(e.facing) * k * 0.6; }
     return { bob, lx, ly };
   },
+  // 手に持った武器（アイコンを向きに合わせて描画。攻撃中は少し振る）
+  drawHandWeapon(ctx, wi, facing, r, bob, attackT) {
+    const spr = Sprites.iconCanvas(wi);
+    const sc = 16 / Math.max(spr._w, spr._h);
+    const w = spr._w * sc, h = spr._h * sc;
+    const swing = (attackT || 0) > 0 ? Math.sin((1 - attackT / 0.18) * Math.PI) * 0.5 : 0;
+    const hx = Math.cos(facing) * (r + 2), hy = Math.sin(facing) * (r + 2) + bob - 6;
+    ctx.save(); ctx.translate(hx, hy); ctx.rotate(facing + Math.PI / 2 + swing);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(spr, Math.round(-w / 2), Math.round(-h / 2), w, h);
+    ctx.restore();
+  },
+
   facingMark(ctx, ang, r, col) {
     ctx.save(); ctx.translate(0, r * 0.1); ctx.rotate(ang);
     ctx.fillStyle = hexA(col, 0.9);
@@ -466,8 +479,10 @@ const Render = {
     ctx.fillStyle = 'rgba(0,0,0,0.4)';
     ctx.beginPath(); ctx.ellipse(0, r * 0.5, r, r * 0.45, 0, 0, TAU); ctx.fill();
     ctx.save(); ctx.translate(an.lx, an.ly);
-    this.facingMark(ctx, p.facing, r, col);
+    const wi = p.derived.weaponItem;
+    if (!wi) this.facingMark(ctx, p.facing, r, col);
     this.blitSprite(ctx, Sprites.player(p.classId), r, an.bob);
+    if (wi) this.drawHandWeapon(ctx, wi, p.facing, r, an.bob, p.attackT);
     ctx.restore();
     this.drawBar(ctx, -r, (r * 0.5 - 38) - 7, r * 2, 4, p.hp / p.derived.hpmax, '#7ad17a', '#3a0e0e');
     ctx.restore();

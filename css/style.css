@@ -313,6 +313,7 @@ button { font-family: inherit; cursor: pointer; color: var(--ink); }
   display: none; font-family: var(--f-head); background: radial-gradient(circle at 50% 30%, #3a2a55, #1e1430); border: 2px solid #9b7bff; color: #e6d8ff; border-radius: 22px;
   padding: 10px 18px; font-size: 13px; font-weight: 600; letter-spacing: .5px; pointer-events: auto; box-shadow: 0 0 18px rgba(150,110,255,.45);
   animation: zonePulse 1.2s ease-in-out infinite; }
+.interactbtn.go { border-color: var(--gold-bright); color: #fff3d6; box-shadow: 0 0 22px rgba(236,205,126,.5); animation: none; }
 
 .hint { display: none; }
 
