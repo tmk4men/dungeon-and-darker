@@ -111,7 +111,7 @@ const Game = {
   // 現在の深度でレベルを生成（プレイヤー状態は維持）
   buildLevel() {
     this.dgn = genDungeon(this.floor, this.derived);
-    this.projectiles = []; this.particles = []; this.floatTexts = []; this.extractT = 0;
+    this.projectiles = []; this.particles = []; this.floatTexts = []; this.fx = []; this.extractT = 0;
     this.runTime = 0;
     this.enemies = this.dgn.enemySpawns.map(sp => this.makeEnemy(sp.type, sp.x, sp.y));
     this.groundItems = this.dgn.groundItems.slice();
@@ -122,6 +122,7 @@ const Game = {
     this.nearAltar = null; this.nearStairs = null;
     this.player.x = this.dgn.startX; this.player.y = this.dgn.startY;
     this.player.dodgeT = 0; this.player.invuln = 0.6; // 到着直後の保護
+    this.transitionT = 1.5; this.transitionName = realmName(this.floor);
     this.initZone();
     Audio2.init();
   },
@@ -203,6 +204,7 @@ const Game = {
       const ds = d.speed * 3.4;
       const np = tryMove(this.dgn, p.x, p.y, CONFIG.PLAYER_R, Math.cos(p.dodgeDir) * ds * dt, Math.sin(p.dodgeDir) * ds * dt);
       p.x = np.x; p.y = np.y; p.facing = p.dodgeDir;
+      p._moving = true; p.walkPhase = (p.walkPhase || 0) + dt * 24;
       this.particles.push({ x: p.x, y: p.y, vx: 0, vy: 0, r: 7, color: 'rgba(180,210,255,0.7)', life: 0.2, maxlife: 0.2 });
     } else {
       let mx = Input.move.x, my = Input.move.y;
@@ -211,7 +213,8 @@ const Game = {
         const np = tryMove(this.dgn, p.x, p.y, CONFIG.PLAYER_R, mx * sp * dt, my * sp * dt);
         p.x = np.x; p.y = np.y;
         if (!Input.aimVec.active) p.facing = angleOf(mx, my);
-      }
+        p._moving = true; p.walkPhase = (p.walkPhase || 0) + dt * 16;
+      } else p._moving = false;
     }
 
     // 継続ダメージ（プレイヤー）
@@ -225,6 +228,7 @@ const Game = {
     p.potionCd = Math.max(0, p.potionCd - dt);
     p.invuln = Math.max(0, p.invuln - dt);
     p.dodgeCd = Math.max(0, p.dodgeCd - dt);
+    p.attackT = Math.max(0, (p.attackT || 0) - dt);
     p.skillCd[0] = Math.max(0, p.skillCd[0] - dt);
     p.skillCd[1] = Math.max(0, p.skillCd[1] - dt);
     p.mp = Math.min(d.mpmax, p.mp + d.mpregen * dt);
@@ -241,6 +245,7 @@ const Game = {
     this.updateAltars();
     this.updateTraps(dt);
     this.runTime += dt;
+    if (this.transitionT > 0) this.transitionT -= dt;
     this.updateZone(dt);
 
     // 敵
@@ -266,6 +271,7 @@ const Game = {
     this.particles = this.particles.filter(pa => pa.life > 0);
     for (const f of this.floatTexts) { f.y += f.vy * dt; f.vy += 60 * dt; f.life -= dt; }
     this.floatTexts = this.floatTexts.filter(f => f.life > 0);
+    if (this.fx) { for (const f of this.fx) f.life -= dt; this.fx = this.fx.filter(f => f.life > 0); }
 
     if (p.hp <= 0 && !p.dead) this.die();
   },
@@ -304,6 +310,7 @@ const Game = {
     const p = this.player, d = p.derived, wt = d.wtype;
     if (p.attackCd > 0) return;
     p.attackCd = wt.speed * d.atkSpeedMult;
+    p.attackT = 0.18;
     const power = attackPower(d, wt.scaling) * this.buffMul(wt.kind === 'magic' ? 'matk' : 'patk');
     if (wt.kind === 'melee') {
       this.meleeSwing(p.x, p.y, ang, wt.range, wt.arc, power, { crit: d.crit, critDmg: d.critDmg, knock: wt.knock || 0, color: wt.color });
@@ -323,7 +330,7 @@ const Game = {
     const p = this.player, d = p.derived, s = SKILLS[sid];
     if (p.skillCd[slot] > 0) { this.toast('クールダウン中'); return false; }
     if (p.mp < s.mp) { this.toast('MPが足りない'); return false; }
-    p.mp -= s.mp; p.skillCd[slot] = s.cd;
+    p.mp -= s.mp; p.skillCd[slot] = s.cd; p.attackT = 0.18;
     const power = s.scaling ? attackPower(d, s.scaling) * s.dmg * this.buffMul(s.scaling === 'WILL' ? 'matk' : 'patk') : 0;
     const opt = { crit: d.crit, critDmg: d.critDmg, color: s.color, holy: s.holy, dot: s.dot, slow: s.slow, knock: s.knock || 0, lifesteal: s.lifesteal, stun: s.stun };
     Audio2.play(s.kind === 'heal' ? 'heal' : s.kind === 'buff' ? 'potion' : 'magic');
@@ -363,12 +370,8 @@ const Game = {
   },
 
   meleeSwing(x, y, ang, range, arc, power, opt) {
-    // 視覚
-    for (let i = 0; i < 7; i++) {
-      const a = ang + (i / 6 - 0.5) * arc;
-      const r = range * 0.7;
-      this.particles.push({ x: x + Math.cos(a) * r, y: y + Math.sin(a) * r, vx: Math.cos(a) * 40, vy: Math.sin(a) * 40, r: 4, color: opt.color || '#fff', life: 0.16, maxlife: 0.16 });
-    }
+    // 斬撃の弧
+    this.spawnSlash(x, y, ang, arc, range, opt.color || '#e8eef6');
     for (const e of this.enemies) {
       if (e.dead) continue;
       const dd = dist(x, y, e.x, e.y);
@@ -381,6 +384,7 @@ const Game = {
 
   nova(x, y, radius, power, opt) {
     this.burst(x, y, opt.color, 26, radius);
+    this.spawnRing(x, y, 10, radius + 8, opt.color, 0.42, 5);
     for (const e of this.enemies) {
       if (e.dead) continue;
       if (dist(x, y, e.x, e.y) <= radius + e.r) {
@@ -430,6 +434,7 @@ const Game = {
 
   explode(pr) {
     this.burst(pr.x, pr.y, pr.color, 20, pr.explode);
+    this.spawnRing(pr.x, pr.y, 4, pr.explode + 6, pr.color, 0.36, 4);
     for (const e of this.enemies) {
       if (e.dead || pr.hits.has(e)) continue;
       if (dist(pr.x, pr.y, e.x, e.y) <= pr.explode + e.r) this.hitEnemy(e, pr.dmg * 0.8, pr.ang, { ...pr, explode: 0 });
@@ -458,6 +463,7 @@ const Game = {
       if (heal >= 1) this.addFloat(this.player.x, this.player.y - 24, '+' + Math.round(heal), '#ff6ea0', 13);
     }
     this.addFloat(e.x, e.y - e.r - 6, '' + dmg, crit ? '#ffd24a' : '#ffffff', crit ? 22 : 15);
+    this.spawnRing(e.x, e.y - e.r * 0.3, 2, e.r + (crit ? 12 : 6), crit ? '#ffd24a' : '#fff', crit ? 0.24 : 0.16, crit ? 3 : 2);
     if (crit) { this.burst(e.x, e.y, '#ffd24a', 6); this.hitStop = Math.max(this.hitStop, 0.05); this.addShake(4); }
     else this.hitStop = Math.max(this.hitStop, 0.02);
     Audio2.play(crit ? 'crit' : 'hit');
@@ -540,6 +546,8 @@ const Game = {
     const p = this.player;
     e.hitFlash = Math.max(0, e.hitFlash - dt);
     e.atkCd = Math.max(0, e.atkCd - dt);
+    e.attackT = Math.max(0, (e.attackT || 0) - dt);
+    e._moving = false;
     // ノックバック適用
     if (Math.abs(e.knockX) + Math.abs(e.knockY) > 1) {
       const np = tryMove(this.dgn, e.x, e.y, e.r, e.knockX * dt, e.knockY * dt);
@@ -607,8 +615,8 @@ const Game = {
 
   moveEnemy(e, ang, spd, dt) {
     const np = tryMove(this.dgn, e.x, e.y, e.r, Math.cos(ang) * spd * dt, Math.sin(ang) * spd * dt);
-    // 他敵との簡易分離
     e.x = np.x; e.y = np.y;
+    e._moving = true; e.walkPhase = (e.walkPhase || 0) + dt * 13;
   },
 
   startWindup(e, def, time) {
@@ -686,6 +694,7 @@ const Game = {
 
   executeAttack(e, def) {
     const p = this.player;
+    e.attackT = 0.2;
     const onHit = e.elite && e.elite.onHit;
     if (def.behavior === 'ranged') {
       e.atkCd = 1.6;
@@ -1019,6 +1028,15 @@ const Game = {
   },
 
   // ---------- FX ----------
+  // 斬撃の弧
+  spawnSlash(x, y, ang, arc, range, color) {
+    (this.fx = this.fx || []).push({ type: 'slash', x, y, ang, arc, range, color, life: 0.2, maxlife: 0.2 });
+  },
+  // 拡がるリング（着弾・爆発・衝撃）
+  spawnRing(x, y, r0, r1, color, life = 0.3, width = 3) {
+    (this.fx = this.fx || []).push({ type: 'ring', x, y, r0, r1, color, life, maxlife: life, width });
+  },
+
   burst(x, y, color, n, spread = 30) {
     for (let i = 0; i < n; i++) {
       const a = rand(0, TAU), s = rand(40, 40 + spread * 3);

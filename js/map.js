@@ -5,10 +5,10 @@ const T_WALL = 0, T_FLOOR = 1, T_DOOR = 2, T_DOOROPEN = 3;
 
 // バイオーム（見た目テーマ）
 const THEMES = {
-  crypt:   { name: '古城の地下', floorA: '#26242c', floorB: '#2c2a33', wallTop: '#4a4754', wallTopHi: '#54515f', wallFaceA: '#3a3742', wallFaceB: '#1c1a22', lightCol: '#ffae5b' },
-  cave:    { name: '洞窟', floorA: '#2a2620', floorB: '#302b22', wallTop: '#4a4038', wallTopHi: '#564a40', wallFaceA: '#3a3026', wallFaceB: '#1e1812', lightCol: '#ffcf7a' },
-  inferno: { name: '溶岩窟', floorA: '#2c1e1e', floorB: '#321f1f', wallTop: '#4e3232', wallTopHi: '#5e3a3a', wallFaceA: '#402424', wallFaceB: '#221212', lightCol: '#ff7a3c' },
-  ice:     { name: '氷窟', floorA: '#222a30', floorB: '#26303a', wallTop: '#46545f', wallTopHi: '#536470', wallFaceA: '#36424c', wallFaceB: '#161e24', lightCol: '#9fd8ff' },
+  crypt:   { name: '古城の地下', floorA: '#26242c', floorB: '#2c2a33', wallTop: '#4a4754', wallTopHi: '#54515f', wallFaceA: '#3a3742', wallFaceB: '#1c1a22', lightCol: '#ffae5b', accent: '#6a6a86', accentType: 'stone' },
+  cave:    { name: '洞窟', floorA: '#2a2620', floorB: '#302b22', wallTop: '#4a4038', wallTopHi: '#564a40', wallFaceA: '#3a3026', wallFaceB: '#1e1812', lightCol: '#ffcf7a', accent: '#6a5634', accentType: 'earth' },
+  inferno: { name: '焦熱地獄', floorA: '#2c1c1a', floorB: '#341e1c', wallTop: '#4e3030', wallTopHi: '#623838', wallFaceA: '#3e2220', wallFaceB: '#201010', lightCol: '#ff7a3c', accent: '#ff7a3c', accentType: 'lava' },
+  ice:     { name: '寒氷地獄', floorA: '#222a30', floorB: '#26303a', wallTop: '#46545f', wallTopHi: '#536470', wallFaceA: '#36424c', wallFaceB: '#161e24', lightCol: '#9fd8ff', accent: '#cfeaff', accentType: 'frost' },
 };
 function pickTheme(floor) {
   // 堕ちるほど地獄へ：人間界=石窟、修羅界=紅蓮、畜生界=洞、餓鬼界=寒獄、地獄界以降=焦熱

@@ -142,14 +142,21 @@ const Input = {
     };
     if (this.left.id === null) drawBase(home.left.x, home.left.y, '#7fbfff', '移動'); else drawStick(this.left, '#7fbfff');
     if (this.right.id === null) drawBase(home.right.x, home.right.y, '#ff9f6b', '攻撃'); else drawStick(this.right, '#ff9f6b');
-    // 右スティック：照準ライン
+    // 右スティック：照準ライン（プレイヤーの実画面位置から。端でカメラがクランプしてもズレない）
     if (this.right.id !== null && this.aimVec.len > 0.12) {
-      ctx.save(); ctx.globalAlpha = 0.6;
+      let px = CONFIG.VIEW_W / 2, py = CONFIG.VIEW_H / 2;
+      if (typeof Game !== 'undefined' && Game.player && typeof Render !== 'undefined' && Render.cam) {
+        const ps = Render.worldToScreen(Game.player.x, Game.player.y); px = ps.x; py = ps.y;
+      }
+      const ca = Math.cos(this.aimVec.ang), sa = Math.sin(this.aimVec.ang);
+      ctx.save(); ctx.globalAlpha = 0.65;
       ctx.strokeStyle = '#ffce6b'; ctx.lineWidth = 4; ctx.setLineDash([10, 8]);
-      ctx.beginPath();
-      ctx.moveTo(CONFIG.VIEW_W / 2, CONFIG.VIEW_H / 2);
-      ctx.lineTo(CONFIG.VIEW_W / 2 + Math.cos(this.aimVec.ang) * 220, CONFIG.VIEW_H / 2 + Math.sin(this.aimVec.ang) * 220);
-      ctx.stroke(); ctx.restore();
+      ctx.beginPath(); ctx.moveTo(px + ca * 18, py + sa * 18); ctx.lineTo(px + ca * 240, py + sa * 240); ctx.stroke();
+      ctx.setLineDash([]);
+      // 着弾目安マーカー
+      ctx.globalAlpha = 0.8; ctx.fillStyle = '#ffce6b';
+      ctx.beginPath(); ctx.arc(px + ca * 240, py + sa * 240, 5, 0, TAU); ctx.fill();
+      ctx.restore();
     }
   },
 

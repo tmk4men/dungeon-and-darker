@@ -72,6 +72,8 @@ const Render = {
   render(game) {
     const ctx = this.ctx, dgn = game.dgn, T = CONFIG.TILE;
     this.theme = dgn.theme || THEMES.crypt;
+    this.tiles = Sprites.realmTiles(this.theme);
+    ctx.imageSmoothingEnabled = false;
     this.updateCamera(game.player, dgn);
     // 画面シェイク
     if (game.shake && game.shake.t > 0) {
@@ -92,25 +94,8 @@ const Render = {
         const t = dgn.get(tx, ty);
         if (t === T_WALL) continue;
         const s = this.worldToScreen(tx * T, ty * T);
-        const even = (tx + ty) & 1;
-        ctx.fillStyle = even ? this.theme.floorA : this.theme.floorB;
-        ctx.fillRect(s.x, s.y, T + 1, T + 1);
-        // 石畳の質感（タイルごとに安定した装飾）
-        const hh = this.hash(tx, ty);
-        ctx.fillStyle = hh > 0.5 ? 'rgba(255,238,206,0.05)' : 'rgba(0,0,0,0.12)';
-        ctx.fillRect(s.x + 3 + hh * (T - 9), s.y + 3 + ((hh * 31) % 1) * (T - 9), 3, 3);
-        if (hh > 0.86) {
-          ctx.fillStyle = 'rgba(0,0,0,0.10)';
-          ctx.fillRect(s.x + 5 + ((hh * 57) % 1) * (T - 10), s.y + 6 + ((hh * 17) % 1) * (T - 12), 2, 2);
-        }
-        if (hh > 0.94) { // 罅
-          ctx.strokeStyle = 'rgba(0,0,0,0.22)'; ctx.lineWidth = 1;
-          ctx.beginPath(); ctx.moveTo(s.x + T * 0.26, s.y + T * 0.28); ctx.lineTo(s.x + T * 0.5, s.y + T * 0.52); ctx.lineTo(s.x + T * 0.42, s.y + T * 0.78); ctx.stroke();
-        }
-        // 目地
-        ctx.fillStyle = 'rgba(0,0,0,0.2)';
-        ctx.fillRect(s.x, s.y, T + 1, 1.5);
-        ctx.fillRect(s.x, s.y, 1.5, T + 1);
+        const v = (this.hash(tx, ty) * 3) | 0;
+        ctx.drawImage(this.tiles.floors[v] || this.tiles.floors[0], s.x, s.y, T + 1, T + 1);
         if (t === T_DOOR || t === T_DOOROPEN) this.drawDoorFloor(ctx, s, t);
       }
     }
@@ -146,7 +131,8 @@ const Render = {
     ents.sort((a, b) => a.y - b.y);
     for (const e of ents) (e === game.player) ? this.drawPlayer(ctx, e) : this.drawEnemy(ctx, e, game);
 
-    // --- 投射物・パーティクル ---
+    // --- 攻撃エフェクト・投射物・パーティクル ---
+    if (game.fx) for (const f of game.fx) this.drawFx(ctx, f);
     for (const p of game.projectiles) this.drawProjectile(ctx, p);
     for (const p of game.particles) this.drawParticle(ctx, p);
 
@@ -164,6 +150,31 @@ const Render = {
 
     // --- ミニマップ ---
     this.drawMinimap(game);
+
+    // --- realm遷移演出（墨＋筆でrealm名） ---
+    if (game.transitionT > 0) this.drawTransition(game);
+  },
+
+  drawTransition(game) {
+    const dur = 1.5, k = clamp(game.transitionT / dur, 0, 1);
+    const cover = Math.sin(k * Math.PI); // 0→1→0
+    const ctx = this.ctx, W = CONFIG.VIEW_W, H = CONFIG.VIEW_H;
+    ctx.save();
+    ctx.fillStyle = `rgba(6,5,9,${0.94 * cover})`;
+    ctx.fillRect(0, 0, W, H);
+    ctx.globalAlpha = Math.min(1, cover * 1.3);
+    // 後光
+    const g = ctx.createRadialGradient(W / 2, H / 2, 10, W / 2, H / 2, H * 0.4);
+    g.addColorStop(0, 'rgba(200,150,60,0.18)'); g.addColorStop(1, 'rgba(200,150,60,0)');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    // realm名（筆）
+    ctx.fillStyle = '#ecd07e'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = `${Math.round(H * 0.17)}px "Yuji Syuku", "Shippori Mincho B1", serif`;
+    ctx.fillText(game.transitionName, W / 2, H / 2 - H * 0.02);
+    // 朱の下線
+    ctx.strokeStyle = `rgba(200,64,47,${0.8 * cover})`; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(W / 2 - H * 0.16, H / 2 + H * 0.12); ctx.lineTo(W / 2 + H * 0.16, H / 2 + H * 0.12); ctx.stroke();
+    ctx.restore(); ctx.globalAlpha = 1;
   },
 
   drawChannel(ch) {
@@ -250,19 +261,15 @@ const Render = {
       ctx.fillStyle = g;
       ctx.fillRect(s.x, topY + T, T + 1, H + 1);
     }
-    // 上面
-    ctx.fillStyle = th.wallTop;
-    ctx.fillRect(s.x, topY, T + 1, T + 1);
-    ctx.fillStyle = th.wallTopHi;
-    ctx.fillRect(s.x + 2, topY + 2, T - 3, T - 3);
-    // 上面の溝
-    ctx.fillStyle = 'rgba(0,0,0,0.22)';
-    ctx.fillRect(s.x, topY, T + 1, 2);
-    ctx.fillRect(s.x, topY, 2, T + 1);
+    // 上面（ドット絵タイル）
+    if (this.tiles) ctx.drawImage(this.tiles.wallTop, s.x, topY, T + 1, T + 1);
+    else { ctx.fillStyle = th.wallTop; ctx.fillRect(s.x, topY, T + 1, T + 1); }
+    // 上面の縁（立体感）
+    ctx.fillStyle = 'rgba(255,240,210,0.06)'; ctx.fillRect(s.x, topY, T + 1, 1.5);
+    ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.fillRect(s.x, topY + T - 1, T + 1, 2);
     // 苔・罅（安定装飾）
     const hw = this.hash(tx * 7 + 3, ty * 7 + 5);
-    if (hw > 0.82) { ctx.fillStyle = 'rgba(86,112,72,0.2)'; ctx.fillRect(s.x + 4 + hw * (T - 12), topY + 4 + ((hw * 19) % 1) * (T - 12), 5, 4); }
-    else if (hw < 0.16) { ctx.strokeStyle = 'rgba(0,0,0,0.28)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(s.x + T * 0.3, topY + 3); ctx.lineTo(s.x + T * 0.38, topY + T * 0.6); ctx.stroke(); }
+    if (hw > 0.85) { ctx.fillStyle = 'rgba(86,112,72,0.22)'; ctx.fillRect(s.x + 4 + hw * (T - 12), topY + 4 + ((hw * 19) % 1) * (T - 12), 5, 4); }
   },
 
   drawDoorFloor(ctx, s, t) {
@@ -407,13 +414,20 @@ const Render = {
     ctx.restore();
   },
 
-  // ドット絵スプライトを足元基準で描画
-  blitSprite(ctx, spr, r) {
+  // ドット絵スプライトを足元基準で描画（bobY=上下アニメ）
+  blitSprite(ctx, spr, r, bobY = 0) {
     const sc = (r * 2.7) / spr._w;
     const w = spr._w * sc, h = spr._h * sc;
     ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(spr, Math.round(-w / 2), Math.round(r * 0.5 - h), w, h);
-    return r * 0.5 - h; // topY
+    ctx.drawImage(spr, Math.round(-w / 2), Math.round(r * 0.5 - h + bobY), w, h);
+    return r * 0.5 - h + bobY; // topY
+  },
+  // 歩行/攻撃アニメのオフセット
+  animOffset(e) {
+    const bob = e._moving ? -Math.abs(Math.sin(e.walkPhase || 0)) * 3 : Math.sin((performance.now() / 520) + (e.x || 0)) * 0.8;
+    let lx = 0, ly = 0;
+    if (e.attackT > 0) { const k = Math.sin((1 - e.attackT / 0.18) * Math.PI) * 7; lx = Math.cos(e.facing) * k; ly = Math.sin(e.facing) * k * 0.6; }
+    return { bob, lx, ly };
   },
   facingMark(ctx, ang, r, col) {
     ctx.save(); ctx.translate(0, r * 0.1); ctx.rotate(ang);
@@ -429,11 +443,14 @@ const Render = {
     if (p.dodgeT > 0) ctx.globalAlpha = 0.55;
     else if (p.invuln > 0) ctx.globalAlpha = 0.5 + Math.sin(performance.now() / 40) * 0.3;
     const col = CLASSES[p.classId].color;
+    const an = this.animOffset(p);
     ctx.fillStyle = 'rgba(0,0,0,0.4)';
     ctx.beginPath(); ctx.ellipse(0, r * 0.5, r, r * 0.45, 0, 0, TAU); ctx.fill();
+    ctx.save(); ctx.translate(an.lx, an.ly);
     this.facingMark(ctx, p.facing, r, col);
-    const topY = this.blitSprite(ctx, Sprites.player(col), r);
-    this.drawBar(ctx, -r, topY - 7, r * 2, 4, p.hp / p.derived.hpmax, '#7ad17a', '#3a0e0e');
+    const topY = this.blitSprite(ctx, Sprites.player(col), r, an.bob);
+    ctx.restore();
+    this.drawBar(ctx, -r, (r * 0.5 - 38) - 7, r * 2, 4, p.hp / p.derived.hpmax, '#7ad17a', '#3a0e0e');
     ctx.restore();
   },
 
@@ -477,9 +494,14 @@ const Render = {
     ctx.beginPath(); ctx.ellipse(0, r * 0.55, r, r * 0.45, 0, 0, TAU); ctx.fill();
     const hit = e.hitFlash > 0;
     const baseCol = e.elite ? e.elite.color : def.color;
+    const an = this.animOffset(e);
+    ctx.save(); ctx.translate(an.lx, an.ly);
     this.facingMark(ctx, e.facing, r, baseCol);
     const tmpl = Sprites.templateOf(e.type);
-    const topY = hit ? this.blitSprite(ctx, Sprites.flash(tmpl), r) : this.blitSprite(ctx, Sprites.get(tmpl, baseCol), r);
+    if (hit) this.blitSprite(ctx, Sprites.flash(tmpl), r, an.bob);
+    else this.blitSprite(ctx, Sprites.get(tmpl, baseCol), r, an.bob);
+    ctx.restore();
+    const topY = -r * 2.2;
     this.drawBar(ctx, -r, topY - 7, r * 2, def.boss ? 6 : 4, e.hp / e.maxhp, def.boss ? '#ff6a4d' : (e.elite ? hexA(e.elite.color, 1) : '#e0574d'), '#2a0808');
     if (def.boss) {
       ctx.fillStyle = '#ffd27a'; ctx.font = 'bold 11px "Cinzel", serif'; ctx.textAlign = 'center';
@@ -496,12 +518,16 @@ const Render = {
     const r = e.r, col = e.color || '#ddd';
     const hit = e.hitFlash > 0;
     ctx.save(); ctx.translate(s.x, s.y);
+    const an = this.animOffset(e);
     ctx.fillStyle = 'rgba(0,0,0,0.4)';
     ctx.beginPath(); ctx.ellipse(0, r * 0.5, r, r * 0.45, 0, 0, TAU); ctx.fill();
+    ctx.save(); ctx.translate(an.lx, an.ly);
     this.facingMark(ctx, e.facing, r, col);
-    const topY = hit ? this.blitSprite(ctx, Sprites.flash('monk'), r) : this.blitSprite(ctx, Sprites.player(col), r);
+    if (hit) this.blitSprite(ctx, Sprites.flash('monk'), r, an.bob); else this.blitSprite(ctx, Sprites.player(col), r, an.bob);
+    ctx.restore();
+    const topY = -r * 2.2;
     this.drawBar(ctx, -r, topY - 8, r * 2, 5, e.hp / e.maxhp, '#ff7ad0', '#3a0e2a');
-    ctx.fillStyle = '#ff9fe0'; ctx.font = 'bold 10px "Cinzel", serif'; ctx.textAlign = 'center';
+    ctx.fillStyle = '#ff9fe0'; ctx.font = 'bold 10px "Shippori Mincho B1", serif'; ctx.textAlign = 'center';
     ctx.fillText(ENEMIES.rival.name, 0, topY - 11);
     ctx.restore();
   },
@@ -577,6 +603,28 @@ const Render = {
     ctx.fillStyle = p.color;
     ctx.beginPath(); ctx.arc(s.x, s.y, p.r, 0, TAU); ctx.fill();
     ctx.globalAlpha = 1;
+  },
+
+  drawFx(ctx, f) {
+    const s = this.worldToScreen(f.x, f.y);
+    const k = clamp(f.life / f.maxlife, 0, 1);
+    if (f.type === 'slash') {
+      const prog = 1 - k;
+      const a0 = f.ang - f.arc / 2, a1 = f.ang + f.arc / 2;
+      const a = a0 + (a1 - a0) * Math.min(1, prog * 1.7);
+      ctx.save(); ctx.translate(s.x, s.y);
+      ctx.shadowColor = f.color; ctx.shadowBlur = 8;
+      ctx.globalAlpha = k; ctx.strokeStyle = f.color; ctx.lineWidth = 5 * k + 1; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.arc(0, 0, f.range * 0.68, a0, a); ctx.stroke();
+      ctx.shadowBlur = 0; ctx.globalAlpha = k * 0.5; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(0, 0, f.range * 0.5, a0, a); ctx.stroke();
+      ctx.restore(); ctx.globalAlpha = 1;
+    } else if (f.type === 'ring') {
+      const r = lerp(f.r0, f.r1, 1 - k);
+      ctx.save(); ctx.globalAlpha = k; ctx.strokeStyle = f.color; ctx.lineWidth = (f.width || 3) * k + 0.5;
+      ctx.beginPath(); ctx.arc(s.x, s.y, r, 0, TAU); ctx.stroke();
+      ctx.restore(); ctx.globalAlpha = 1;
+    }
   },
 
   drawFloatText(ctx, d) {

@@ -557,8 +557,9 @@ const UI = {
     let lostHtml = '';
     if (!win && data.lost && data.lost.length) lostHtml = `<div class="card lost"><h3>失った物</h3>${data.lost.map(it => `<div class="res-item">${this.rarityTag(it)}</div>`).join('')}</div>`;
     this.panel(`<div class="screen result ${win ? 'win' : 'lose'}">
-      <h1 class="res-title">${win ? '脱出成功' : '死亡'}</h1>
-      <p class="subtitle">${win ? '戦利品を持ち帰った。' : '持ち込んだ全てを失った。だが経験は残る。'}</p>
+      ${win ? '' : '<div class="samsara"><span></span><span></span><span></span></div>'}
+      <h1 class="res-title">${win ? '生還' : '輪廻'}</h1>
+      <p class="subtitle">${win ? realmName(Game.floor) + 'より戦利品を持ち帰った。' : '持ち込んだ全てを失い、再び人間界へ還る。だが業（カルマ）は経験として残る。'}</p>
       <div class="res-stats">
         <div><span>撃破数</span><b>${data.kills}</b></div>
         <div><span>獲得G</span><b>${win ? '+' + fmt(data.gold) : '0'}</b></div>

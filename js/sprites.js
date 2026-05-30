@@ -48,19 +48,52 @@ const Sprites = {
   templateOf(type) { return (ENEMY_SPRITE[type] || { t: 'demon' }).t; },
   get(tmpl, col) { return this.make(tmpl, SPR[tmpl], col); },
 
-  // アイテムアイコン（行幅は自動でパディング）
+  // アイテムアイコン（常に16x16の中央へ＝並びが揃う）
   makeIcon(key) {
     const ck = 'ic|' + key;
     if (this.cache[ck]) return this.cache[ck];
     const rows = ICONS[key] || ICONS.coin;
     const w = Math.max(...rows.map(r => r.length)), h = rows.length;
-    const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+    const S = 16, ox = Math.floor((S - w) / 2), oy = Math.floor((S - h) / 2);
+    const cv = document.createElement('canvas'); cv.width = S; cv.height = S;
     const c = cv.getContext('2d');
     for (let y = 0; y < h; y++) {
       const row = rows[y];
-      for (let x = 0; x < row.length; x++) { const col = ICON_PAL[row[x]]; if (col) { c.fillStyle = col; c.fillRect(x, y, 1, 1); } }
+      for (let x = 0; x < row.length; x++) { const col = ICON_PAL[row[x]]; if (col) { c.fillStyle = col; c.fillRect(x + ox, y + oy, 1, 1); } }
     }
-    cv._w = w; cv._h = h; this.cache[ck] = cv; return cv;
+    cv._w = S; cv._h = S; this.cache[ck] = cv; return cv;
+  },
+
+  // realm別タイル（16px低解像度→拡大でドット感。床3種＋壁上面）
+  realmTiles(theme) {
+    const ck = 'tiles|' + theme.name;
+    if (this.cache[ck]) return this.cache[ck];
+    const S = 16;
+    const seeded = (seed) => { let s = seed >>> 0; return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296); };
+    const mk = (base, base2, seed, isWall) => {
+      const cv = document.createElement('canvas'); cv.width = S; cv.height = S; const c = cv.getContext('2d');
+      const rnd = seeded(seed);
+      c.fillStyle = base; c.fillRect(0, 0, S, S);
+      // 石積み（互い違いの目地）
+      c.fillStyle = base2;
+      c.fillRect(1, 1, S - 2, 6); c.fillRect(1, 9, 6, 6); c.fillRect(9, 9, 6, 6);
+      c.fillStyle = 'rgba(0,0,0,0.32)';
+      c.fillRect(0, 0, S, 1); c.fillRect(0, 8, S, 1); c.fillRect(0, 15, S, 1);
+      c.fillRect(0, 0, 1, 8); c.fillRect(8, 0, 1, 8); c.fillRect(4, 8, 1, 8); c.fillRect(12, 8, 1, 8);
+      // ノイズ
+      for (let i = 0; i < 16; i++) { const x = (rnd() * S) | 0, y = (rnd() * S) | 0; c.fillStyle = rnd() > 0.55 ? 'rgba(255,250,235,0.06)' : 'rgba(0,0,0,0.14)'; c.fillRect(x, y, 1, 1); }
+      // realmアクセント
+      const at = theme.accentType;
+      if (at === 'lava' && !isWall) { for (let i = 0; i < 6; i++) { const x = (rnd() * S) | 0, y = (rnd() * S) | 0; c.fillStyle = rnd() > 0.5 ? '#ff7a3c' : '#b83518'; c.fillRect(x, y, 1, 1); } }
+      else if (at === 'frost') { for (let i = 0; i < 7; i++) { const x = (rnd() * S) | 0, y = (rnd() * S) | 0; c.fillStyle = 'rgba(207,234,255,0.55)'; c.fillRect(x, y, 1, 1); } }
+      else if (at === 'earth') { for (let i = 0; i < 5; i++) { const x = (rnd() * S) | 0, y = (rnd() * S) | 0; c.fillStyle = 'rgba(120,90,50,0.4)'; c.fillRect(x, y, 1, 1); } }
+      cv._w = S; cv._h = S; return cv;
+    };
+    const res = {
+      floors: [mk(theme.floorA, theme.floorB, 7, false), mk(theme.floorB, theme.floorA, 31, false), mk(theme.floorA, theme.floorB, 53, false)],
+      wallTop: mk(theme.wallTop, theme.wallTopHi, 101, true),
+    };
+    this.cache[ck] = res; return res;
   },
   iconCanvas(item) { return this.makeIcon(iconKey(item)); },
   iconURL(item) {
