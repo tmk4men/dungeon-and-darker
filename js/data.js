@@ -115,6 +115,22 @@ const CLASSES = {
 // 廃止した職業の救済（旧セーブ → 似た職へ）
 const REMOVED_CLASS_MAP = { paladin: 'fighter', warlock: 'mage', lancer: 'rogue' };
 
+// 職業ごとに扱える武器カテゴリ（標準武器＋相性の良い得物）。武器以外は誰でも装備可
+const CLASS_WEAPONS = {
+  fighter:   ['sword', 'spear', 'mace'],
+  barbarian: ['hammer', 'flail', 'mace'],
+  ranger:    ['bow', 'spear', 'dagger'],
+  rogue:     ['dagger', 'sword', 'bow'],
+  cleric:    ['mace', 'flail', 'staff'],
+  mage:      ['staff', 'tome', 'dagger'],
+};
+function canEquipItem(classId, item) {
+  if (!item || item.slot !== 'weapon') return true; // 防具・装飾・トーチ等は職業不問
+  const allow = CLASS_WEAPONS[classId];
+  if (!allow) return true;
+  return allow.includes(item.wtype);
+}
+
 // --- アイテムベース ---
 // slot: weapon/head/chest/hands/legs/ring/torch/potion/treasure
 const ITEM_BASES = [

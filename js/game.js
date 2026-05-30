@@ -919,6 +919,7 @@ const Game = {
   bagEquip(entry) {
     const it = entry && entry.item;
     if (!it || !['weapon', 'head', 'chest', 'hands', 'legs', 'ring', 'torch'].includes(it.slot)) return;
+    if (!canEquipItem(this.profile.classId, it)) { this.toast(CLASSES[this.profile.classId].name + 'はこの武器を扱えない'); Audio2.play('ui'); return; }
     const prev = this.profile.equipment[it.slot];
     bagRemoveItem(this.run.bag, entry);
     this.profile.equipment[it.slot] = it;

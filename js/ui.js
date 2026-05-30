@@ -171,7 +171,7 @@ const UI = {
       cards += `<div class="class-card ${cur ? 'cur' : ''}" style="--ac:${c.color}">
         <canvas class="cc-av" width="64" height="72" data-cls="${id}"></canvas>
         <div class="cc-name">${c.name}</div>
-        <div class="cc-weap">得物：${wt.name}</div>
+        <div class="cc-weap">得物：${(CLASS_WEAPONS[id] || [c.weapon]).map(w => WEAPON_TYPES[w].name).join('・')}</div>
         <div class="cc-blurb">${c.blurb}</div>
         <div class="cc-stats">${ATTRS.map(a => `<span>${a.name}${c.base[a.key]}</span>`).join('')}</div>
         <div class="cc-skills">${c.skills.map(s => `${SKILLS[s].icon} ${SKILLS[s].name}`).join('・')}</div>
@@ -290,12 +290,15 @@ const UI = {
     </div>`).join('');
     // 装備可能な倉庫アイテム
     const equippable = stashItems(p).filter(it => ['weapon', 'head', 'chest', 'hands', 'legs', 'ring', 'torch'].includes(it.slot));
-    const list = equippable.length ? equippable.map(it => `<div class="inv-row">
-        <div>${this.rarityTag(it)} <span class="slot-tag">${SLOT_NAMES[it.slot]}</span>
+    const list = equippable.length ? equippable.map(it => {
+      const ok = canEquipItem(p.classId, it);
+      return `<div class="inv-row${ok ? '' : ' lockrow'}">
+        <div>${this.rarityTag(it)} <span class="slot-tag">${SLOT_NAMES[it.slot]}</span>${ok ? '' : '<span class="slot-tag lock">職業外</span>'}
           <div class="eq-stat">${statLine(it.stats)}</div>
-          <div class="cmp-line">${compareLine(it, p.equipment[it.slot])}</div></div>
-        <button class="btn sm equip" data-uid="${it.uid}">装備</button>
-      </div>`).join('') : '<div class="muted">倉庫に装備品はありません</div>';
+          <div class="cmp-line">${ok ? compareLine(it, p.equipment[it.slot]) : '<span class="cmp down">' + CLASSES[p.classId].name + 'は扱えない武器</span>'}</div></div>
+        ${ok ? `<button class="btn sm equip" data-uid="${it.uid}">装備</button>` : '<button class="btn sm" disabled>不可</button>'}
+      </div>`;
+    }).join('') : '<div class="muted">倉庫に装備品はありません</div>';
     return `<div class="cols">
       <div class="col"><div class="card"><h3>装備中（ダンジョンへ持ち込む＝死亡でロスト）</h3>${slotHtml}${potHtml}</div></div>
       <div class="col"><div class="card"><h3>倉庫の装備品</h3>${list}</div></div>
@@ -314,7 +317,7 @@ const UI = {
       const it = sel.item; const eq = ['weapon', 'head', 'chest', 'hands', 'legs', 'ring', 'torch'].includes(it.slot);
       act = `<div class="bag-actions">${this.rarityTag(it)}
         ${sel.w !== sel.h ? '<button class="btn sm srot">回転</button>' : ''}
-        ${eq ? '<button class="btn sm sequip">装備</button>' : ''}
+        ${eq ? (canEquipItem(p.classId, it) ? '<button class="btn sm sequip">装備</button>' : '<button class="btn sm" disabled>職業外</button>') : ''}
         ${it.slot === 'potion' ? '<button class="btn sm stopot">薬枠へ</button>' : ''}
         <button class="btn sm ssell">売却 ${this.gold(Math.round(it.value * 0.6))}</button></div>`;
     }
@@ -415,7 +418,7 @@ const UI = {
     const ssel = (this.stashSel && p.stash.items.includes(this.stashSel)) ? this.stashSel : null;
     const SA = (cls, fn) => { const el = this.root.querySelector(cls); if (el) el.addEventListener('click', () => { fn(); reload(); }); };
     SA('.srot', () => { if (ssel) stashRotate(p, ssel); });
-    SA('.sequip', () => { if (ssel) { const it = ssel.item, slot = it.slot; stashRemoveItem(p, it); if (p.equipment[slot]) stashAddItem(p, p.equipment[slot]); p.equipment[slot] = it; this.stashSel = null; } });
+    SA('.sequip', () => { if (ssel) { const it = ssel.item; if (!canEquipItem(p.classId, it)) { this.toast(CLASSES[p.classId].name + 'はこの武器を扱えない'); return; } const slot = it.slot; stashRemoveItem(p, it); if (p.equipment[slot]) stashAddItem(p, p.equipment[slot]); p.equipment[slot] = it; this.stashSel = null; } });
     SA('.stopot', () => { if (ssel) { const slot = p.potions.findIndex(x => !x); if (slot < 0) { this.toast('ポーション枠が満杯'); return; } p.potions[slot] = ssel.item; stashRemoveItem(p, ssel.item); this.stashSel = null; } });
     SA('.ssell', () => { if (ssel) { p.gold += Math.round(ssel.item.value * 0.6); stashRemoveItem(p, ssel.item); this.stashSel = null; Audio2.play && Audio2.play('coin'); } });
     // スキル選択
@@ -466,6 +469,7 @@ const UI = {
     const p = Game.profile;
     const it = stashItems(p).find(x => x.uid === uid);
     if (!it) return;
+    if (!canEquipItem(p.classId, it)) { this.toast(CLASSES[p.classId].name + 'はこの武器を扱えない'); return; }
     const slot = it.slot;
     stashRemoveItem(p, it);
     if (p.equipment[slot]) stashAddItem(p, p.equipment[slot]);
@@ -657,7 +661,7 @@ const UI = {
       const eq = ['weapon', 'head', 'chest', 'hands', 'legs', 'ring', 'torch'].includes(it.slot);
       actHtml = `<div class="bag-actions">${this.rarityTag(it)}
         ${sel.w !== sel.h ? '<button class="btn sm brot">回転</button>' : ''}
-        ${eq ? '<button class="btn sm bequip">装備</button>' : ''}
+        ${eq ? (canEquipItem(p.classId, it) ? '<button class="btn sm bequip">装備</button>' : '<button class="btn sm" disabled>職業外</button>') : ''}
         ${it.slot === 'potion' ? '<button class="btn sm buse">使う</button><button class="btn sm bslot">薬枠へ</button>' : ''}
         <button class="btn sm danger bdrop">捨てる</button></div>`;
     }

@@ -220,6 +220,8 @@ button { font-family: inherit; cursor: pointer; color: var(--ink); }
 .inv-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 9px; border-bottom: 1px solid rgba(90,74,40,.2); flex-wrap: wrap; }
 .inv-act { display: flex; align-items: center; gap: 6px; }
 .slot-tag { font-size: 10px; color: var(--ink-dim); background: #0c0904; padding: 1px 6px; border-radius: 3px; border: 1px solid var(--line); font-family: var(--f-head); }
+.slot-tag.lock { color: #d98a6a; border-color: #5a2c22; background: #1c0e0a; }
+.inv-row.lockrow { opacity: .68; }
 .val { font-size: 12px; color: var(--gold-bright); font-family: var(--f-head); }
 .rar { font-weight: 700; font-size: 13px; font-family: var(--f-flavor); overflow-wrap: anywhere; }
 /* コイン表記 */
@@ -292,8 +294,9 @@ button { font-family: inherit; cursor: pointer; color: var(--ink); }
 .bag-top { display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: linear-gradient(180deg, #1a1726, #110f1a); border-bottom: 1px solid var(--line2); }
 .bag-top b { font-family: var(--f-head); font-size: 16px; color: var(--gold-bright); }
 .bag-top .bagclose { margin-left: auto; }
-.bag-cols { display: grid; grid-template-columns: 1fr 1.15fr; gap: 12px; padding: 14px; overflow: auto; align-items: start; }
-@media (max-width: 720px) { .bag-cols { grid-template-columns: 1fr; } }
+/* 拾うアイテム=左／自分のバッグ=右 を常に維持（縦持ちは#appを回転させており、
+   ビューポート幅基準のメディアクエリでは段組みが壊れるため2カラム固定） */
+.bag-cols { display: grid; grid-template-columns: 1fr 1.15fr; gap: 10px; padding: 12px; overflow: auto; align-items: start; }
 .eq-sub { margin-top: 14px !important; }
 .eqgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; }
 .bag-pane { background: rgba(12,9,5,.4); border: 1px solid var(--line); border-radius: 4px; padding: 12px; }
