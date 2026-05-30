@@ -228,11 +228,13 @@ const Render = {
         ctx.fillStyle = hexA(col, 0.12 + i * 0.05);
         ctx.beginPath(); ctx.arc(0, 0, rr, 0, TAU); ctx.fill();
       }
-      ctx.strokeStyle = hexA(edge, 0.85);
+      ctx.shadowColor = edge; ctx.shadowBlur = 18;
+      ctx.strokeStyle = hexA(edge, 0.9);
       ctx.lineWidth = 3;
       ctx.beginPath(); ctx.arc(0, 0, R * 0.7, t % TAU, t % TAU + 5); ctx.stroke();
+      ctx.shadowBlur = 0;
       ctx.fillStyle = portal.bonus ? '#fff0c8' : '#eaffff';
-      ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'center';
+      ctx.font = 'bold 12px "Cinzel", serif'; ctx.textAlign = 'center';
       ctx.fillText(portal.bonus ? '★報酬の脱出' : '脱出', 0, -R - 6);
     } else {
       // 未開放：暗くロック表示＋カウントダウン
@@ -294,16 +296,25 @@ const Render = {
     const col = RARITY[g.item.rarity] ? RARITY[g.item.rarity].color : '#fff';
     const t = performance.now() / 600;
     const yo = Math.sin(t + g.x) * 2;
+    const rare = RARITY_ORDER.indexOf(g.item.rarity) >= 3;
     ctx.save(); ctx.translate(s.x, s.y + yo);
-    ctx.fillStyle = hexA(col, 0.25);
-    ctx.beginPath(); ctx.arc(0, 0, 12, 0, TAU); ctx.fill();
+    // 光柱（レア以上は強く）
+    if (rare) {
+      const beam = ctx.createLinearGradient(0, -36, 0, 4);
+      beam.addColorStop(0, 'rgba(0,0,0,0)'); beam.addColorStop(1, hexA(col, 0.35));
+      ctx.fillStyle = beam; ctx.fillRect(-5, -36, 10, 40);
+    }
+    ctx.fillStyle = hexA(col, rare ? 0.32 : 0.22);
+    ctx.beginPath(); ctx.arc(0, 0, rare ? 14 : 11, 0, TAU); ctx.fill();
+    if (rare) { ctx.shadowColor = col; ctx.shadowBlur = 12; }
     ctx.fillStyle = col;
     if (g.item.slot === 'potion') {
       ctx.fillRect(-3, -6, 6, 10);
-      ctx.fillStyle = '#ddd'; ctx.fillRect(-2, -8, 4, 3);
+      ctx.fillStyle = '#e8e0d0'; ctx.fillRect(-2, -8, 4, 3);
     } else {
       ctx.beginPath(); ctx.arc(0, 0, 5, 0, TAU); ctx.fill();
     }
+    ctx.shadowBlur = 0;
     ctx.restore();
   },
 
@@ -465,12 +476,17 @@ const Render = {
     const s = this.worldToScreen(p.x, p.y);
     ctx.save(); ctx.translate(s.x, s.y);
     // トレイル
-    ctx.fillStyle = hexA(p.color, 0.25);
-    ctx.beginPath(); ctx.arc(-Math.cos(p.ang) * 8, -Math.sin(p.ang) * 8, p.r * 0.9, 0, TAU); ctx.fill();
+    ctx.fillStyle = hexA(p.color, 0.22);
+    ctx.beginPath(); ctx.arc(-Math.cos(p.ang) * 9, -Math.sin(p.ang) * 9, p.r * 1.0, 0, TAU); ctx.fill();
+    ctx.fillStyle = hexA(p.color, 0.16);
+    ctx.beginPath(); ctx.arc(-Math.cos(p.ang) * 16, -Math.sin(p.ang) * 16, p.r * 0.7, 0, TAU); ctx.fill();
+    // 発光する弾
+    ctx.shadowColor = p.color; ctx.shadowBlur = 14;
     ctx.fillStyle = p.color;
     ctx.beginPath(); ctx.arc(0, 0, p.r, 0, TAU); ctx.fill();
-    ctx.fillStyle = '#ffffff';
-    ctx.beginPath(); ctx.arc(0, 0, p.r * 0.4, 0, TAU); ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = '#fffdf2';
+    ctx.beginPath(); ctx.arc(0, 0, p.r * 0.42, 0, TAU); ctx.fill();
     ctx.restore();
   },
 
@@ -507,9 +523,9 @@ const Render = {
     lctx.setTransform(1, 0, 0, 1, 0, 0);
     lctx.clearRect(0, 0, CONFIG.VIEW_W, CONFIG.VIEW_H);
 
-    // ベースの闇
+    // ベースの闇（暖かみのある漆黒）
     lctx.globalCompositeOperation = 'source-over';
-    lctx.fillStyle = 'rgba(2,2,6,0.95)';
+    lctx.fillStyle = 'rgba(7,4,3,0.95)';
     lctx.fillRect(0, 0, CONFIG.VIEW_W, CONFIG.VIEW_H);
 
     // 既に踏破した「明るい部屋」は記憶として薄く見える
@@ -532,7 +548,7 @@ const Render = {
 
     // 未踏破の部屋は完全に隠す
     lctx.globalCompositeOperation = 'source-over';
-    lctx.fillStyle = 'rgba(2,2,6,1)';
+    lctx.fillStyle = 'rgba(6,4,3,1)';
     for (const r of dgn.rooms) {
       if (r.revealed) continue;
       const s = this.worldToScreen(r.x * T, r.y * T);
@@ -541,6 +557,19 @@ const Render = {
 
     // 合成
     this.ctx.drawImage(this.light, 0, 0);
+
+    // 松明の暖色光（プレイヤー中心）
+    const ps = this.worldToScreen(p.x, p.y);
+    const warmR = (p.derived.hasTorch ? CONFIG.TORCH_VISION : CONFIG.BASE_VISION) * T * 0.75;
+    const fl = 0.10 + Math.sin(game.time * 9) * 0.015;
+    const wg = this.ctx.createRadialGradient(ps.x, ps.y, 0, ps.x, ps.y, warmR);
+    wg.addColorStop(0, `rgba(255,176,92,${fl})`);
+    wg.addColorStop(0.6, `rgba(255,150,70,${fl * 0.4})`);
+    wg.addColorStop(1, 'rgba(255,140,60,0)');
+    this.ctx.globalCompositeOperation = 'lighter';
+    this.ctx.fillStyle = wg;
+    this.ctx.fillRect(0, 0, CONFIG.VIEW_W, CONFIG.VIEW_H);
+    this.ctx.globalCompositeOperation = 'source-over';
   },
 
   carveRoom(lctx, r, strength) {
