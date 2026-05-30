@@ -48,8 +48,6 @@
       <div id="karmainfo" class="karmainfo"></div>
       <!-- 左上：バッグ -->
       <button id="bagbtn" class="bagbtn"><span class="bag-ic">袋</span><span class="bag-ct">0/20</span></button>
-      <!-- 右上：退却 -->
-      <button id="abandon" class="hud-btn">≡ 退却</button>
       <!-- 中央：脱出ゲージ -->
       <div id="extract"></div>
       <!-- 右下：スキル＆ポーション -->
@@ -87,10 +85,6 @@
   <script src="js/ui.js"></script>
   <script src="js/game.js"></script>
   <script>
-    // 退却ボタン（ゲーム内モーダル）
-    document.getElementById('abandon').addEventListener('click', () => {
-      if (Game.state === 'dungeon') UI.confirm('退いて伽藍へ還りますか？\n持ち込んだ装備と道中の戦利品は全て失われます。', () => Game.abandon(), '退く', 'やめる');
-    });
     // インタラクト（押下＝降りる/作法/開ける開始、離す＝開錠中断）
     const ib = document.getElementById('interactbtn');
     ib.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); Game.onInteractDown(); });

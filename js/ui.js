@@ -60,7 +60,7 @@ const UI = {
       no.addEventListener('click', () => { Audio2.play && Audio2.play('ui'); close(); });
     } else { close(); onYes && onYes(); }
   },
-  panel(html) { this.root.style.display = 'flex'; this.root.innerHTML = html; },
+  panel(html) { this.root.style.display = 'flex'; this.root.style.overflowY = ''; this.root.classList.remove('locked'); this.root.innerHTML = html; },
 
   gold(n) {
     const u = (typeof Sprites !== 'undefined') ? Sprites.coinURL() : '';
@@ -85,6 +85,9 @@ const UI = {
       <button class="btn big startbtn">${hasSave ? '修行を続ける' : '門を入る'}</button>
       <div class="start-foot">死ねば全てを失い、また人間界へ還る</div>
     </div>`);
+    // スタート画面は1画面固定（スクロールさせない）
+    this.root.style.overflowY = 'hidden';
+    this.root.classList.add('locked');
     const sb = this.root.querySelector('.startbtn');
     if (sb) sb.addEventListener('click', () => { Audio2.play && Audio2.play('ui'); Game.startGame(); });
   },
@@ -106,8 +109,8 @@ const UI = {
       </div>`;
     }
     this.panel(`<div class="screen">
-      <h1 class="title">DUNGEON <span>&</span> DARKER</h1>
-      <p class="subtitle">職業を選んでダンジョンへ挑め。生きて帰れば戦利品はキミのもの。死ねば全てを失う。</p>
+      <h1 class="title">輪廻 <span>RINNE</span></h1>
+      <p class="subtitle">修行の道を選んでダンジョンへ挑め。生きて還れば戦利品はキミのもの。死ねば全てを失う。</p>
       <div class="class-grid">${cards}</div>
     </div>`);
     this.root.querySelectorAll('.class-card').forEach(card => {
