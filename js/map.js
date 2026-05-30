@@ -11,10 +11,12 @@ const THEMES = {
   ice:     { name: '氷窟', floorA: '#222a30', floorB: '#26303a', wallTop: '#46545f', wallTopHi: '#536470', wallFaceA: '#36424c', wallFaceB: '#161e24', lightCol: '#9fd8ff' },
 };
 function pickTheme(floor) {
-  if (floor === 1) return 'crypt';
-  if (floor === 2) return choice(['cave', 'ice']);
-  if (floor === 3) return 'inferno';
-  return choice(Object.keys(THEMES));
+  // 堕ちるほど地獄へ：人間界=石窟、修羅界=紅蓮、畜生界=洞、餓鬼界=寒獄、地獄界以降=焦熱
+  if (floor <= 1) return 'crypt';
+  if (floor === 2) return 'inferno';
+  if (floor === 3) return 'cave';
+  if (floor === 4) return 'ice';
+  return 'inferno';
 }
 
 function genDungeon(floor, derived) {
@@ -45,7 +47,7 @@ function genDungeon(floor, derived) {
         id: rooms.length, cx, cy,
         x: rx, y: ry, w: rw, h: rh,
         ccx: rx + (rw >> 1), ccy: ry + (rh >> 1),
-        revealed: false, lit, ambient: lit ? 0.5 : 0.92, lights: [],
+        revealed: true, lit, ambient: lit ? 0.5 : 0.92, lights: [],
       };
       grid[cy * cols + cx] = room;
       rooms.push(room);

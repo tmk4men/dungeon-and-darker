@@ -144,8 +144,24 @@ const Render = {
     // --- ゾーン収縮（闇の侵食）を最前面に ---
     if (game.zone) this.drawZone(game);
 
+    // --- 開錠/開封チャネル ---
+    if (game.channel) this.drawChannel(game.channel);
+
     // --- ミニマップ ---
     this.drawMinimap(game);
+  },
+
+  drawChannel(ch) {
+    const s = this.worldToScreen(ch.x, ch.y);
+    const ctx = this.ctx;
+    ctx.save(); ctx.translate(s.x, s.y - 30);
+    ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.arc(0, 0, 13, 0, TAU); ctx.stroke();
+    ctx.strokeStyle = '#ffce6b'; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.arc(0, 0, 13, -Math.PI / 2, -Math.PI / 2 + TAU * clamp(ch.prog, 0, 1)); ctx.stroke();
+    ctx.fillStyle = '#ffe6a8'; ctx.font = 'bold 10px "Shippori Mincho B1", serif'; ctx.textAlign = 'center';
+    ctx.fillText(ch.label, 0, -20);
+    ctx.restore();
   },
 
   drawTrap(ctx, tr) {
@@ -373,35 +389,33 @@ const Render = {
     ctx.restore();
   },
 
+  // ドット絵スプライトを足元基準で描画
+  blitSprite(ctx, spr, r) {
+    const sc = (r * 2.7) / spr._w;
+    const w = spr._w * sc, h = spr._h * sc;
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(spr, Math.round(-w / 2), Math.round(r * 0.5 - h), w, h);
+    return r * 0.5 - h; // topY
+  },
+  facingMark(ctx, ang, r, col) {
+    ctx.save(); ctx.translate(0, r * 0.1); ctx.rotate(ang);
+    ctx.fillStyle = hexA(col, 0.9);
+    ctx.beginPath(); ctx.moveTo(r + 7, 0); ctx.lineTo(r, -4); ctx.lineTo(r, 4); ctx.closePath(); ctx.fill();
+    ctx.restore();
+  },
+
   drawPlayer(ctx, p) {
     const s = this.worldToScreen(p.x, p.y);
     const r = CONFIG.PLAYER_R;
     ctx.save(); ctx.translate(s.x, s.y);
-    // 回避中/無敵中は半透明＋残像で表現
     if (p.dodgeT > 0) ctx.globalAlpha = 0.55;
     else if (p.invuln > 0) ctx.globalAlpha = 0.5 + Math.sin(performance.now() / 40) * 0.3;
-    // 影
-    ctx.fillStyle = 'rgba(0,0,0,0.4)';
-    ctx.beginPath(); ctx.ellipse(0, r * 0.7, r, r * 0.5, 0, 0, TAU); ctx.fill();
-    // 体（高さ表現で少し上に）
-    const by = -8;
-    // 向き三角（武器側）
     const col = CLASSES[p.classId].color;
-    ctx.rotate(p.facing);
-    ctx.fillStyle = hexA(col, 0.9);
-    ctx.beginPath();
-    ctx.moveTo(r + 8, 0); ctx.lineTo(r - 2, -7); ctx.lineTo(r - 2, 7); ctx.closePath(); ctx.fill();
-    ctx.rotate(-p.facing);
-    // 胴体
-    ctx.fillStyle = shade(col, -0.15);
-    ctx.beginPath(); ctx.arc(0, by, r, 0, TAU); ctx.fill();
-    ctx.fillStyle = shade(col, 0.2);
-    ctx.beginPath(); ctx.arc(0, by - 2, r - 4, 0, TAU); ctx.fill();
-    // 頭
-    ctx.fillStyle = '#f2d6b3';
-    ctx.beginPath(); ctx.arc(0, by - 3, r - 6, 0, TAU); ctx.fill();
-    // HPバー
-    this.drawBar(ctx, -r, by - r - 8, r * 2, 4, p.hp / p.derived.hpmax, '#54e36b', '#3a0e0e');
+    ctx.fillStyle = 'rgba(0,0,0,0.4)';
+    ctx.beginPath(); ctx.ellipse(0, r * 0.5, r, r * 0.45, 0, 0, TAU); ctx.fill();
+    this.facingMark(ctx, p.facing, r, col);
+    const topY = this.blitSprite(ctx, Sprites.player(col), r);
+    this.drawBar(ctx, -r, topY - 7, r * 2, 4, p.hp / p.derived.hpmax, '#7ad17a', '#3a0e0e');
     ctx.restore();
   },
 
@@ -442,30 +456,19 @@ const Render = {
       ctx.beginPath(); ctx.arc(0, -6, r + 6, 0, TAU); ctx.fill();
     }
     ctx.fillStyle = 'rgba(0,0,0,0.4)';
-    ctx.beginPath(); ctx.ellipse(0, r * 0.7, r, r * 0.5, 0, 0, TAU); ctx.fill();
-    const by = -6;
+    ctx.beginPath(); ctx.ellipse(0, r * 0.55, r, r * 0.45, 0, 0, TAU); ctx.fill();
     const hit = e.hitFlash > 0;
     const baseCol = e.elite ? e.elite.color : def.color;
-    ctx.fillStyle = hit ? '#ffffff' : shade(baseCol, -0.1);
-    ctx.beginPath(); ctx.arc(0, by, r, 0, TAU); ctx.fill();
-    if (!hit) {
-      ctx.fillStyle = shade(baseCol, 0.18);
-      ctx.beginPath(); ctx.arc(0, by - 2, r - 4, 0, TAU); ctx.fill();
-    }
-    // 目
-    if (!hit) {
-      ctx.fillStyle = def.boss ? '#ff3b3b' : (e.elite ? '#fff' : '#ffe9a8');
-      const ex = Math.cos(e.facing) * 3, ey = Math.sin(e.facing) * 3;
-      ctx.beginPath(); ctx.arc(-3 + ex, by - 2 + ey, 1.8, 0, TAU); ctx.fill();
-      ctx.beginPath(); ctx.arc(3 + ex, by - 2 + ey, 1.8, 0, TAU); ctx.fill();
-    }
-    this.drawBar(ctx, -r, by - r - 7, r * 2, def.boss ? 6 : 4, e.hp / e.maxhp, def.boss ? '#ff6a4d' : (e.elite ? hexA(e.elite.color, 1) : '#e0574d'), '#2a0808');
+    this.facingMark(ctx, e.facing, r, baseCol);
+    const tmpl = Sprites.templateOf(e.type);
+    const topY = hit ? this.blitSprite(ctx, Sprites.flash(tmpl), r) : this.blitSprite(ctx, Sprites.get(tmpl, baseCol), r);
+    this.drawBar(ctx, -r, topY - 7, r * 2, def.boss ? 6 : 4, e.hp / e.maxhp, def.boss ? '#ff6a4d' : (e.elite ? hexA(e.elite.color, 1) : '#e0574d'), '#2a0808');
     if (def.boss) {
-      ctx.fillStyle = '#ffd27a'; ctx.font = 'bold 11px sans-serif'; ctx.textAlign = 'center';
-      ctx.fillText(def.name, 0, by - r - 12);
+      ctx.fillStyle = '#ffd27a'; ctx.font = 'bold 11px "Cinzel", serif'; ctx.textAlign = 'center';
+      ctx.fillText(def.name, 0, topY - 11);
     } else if (e.elite) {
       ctx.fillStyle = e.elite.color; ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'center';
-      ctx.fillText(e.elite.name + def.name, 0, by - r - 11);
+      ctx.fillText(e.elite.name + def.name, 0, topY - 10);
     }
     ctx.restore();
   },
@@ -473,23 +476,15 @@ const Render = {
   drawRival(ctx, e) {
     const s = this.worldToScreen(e.x, e.y);
     const r = e.r, col = e.color || '#ddd';
+    const hit = e.hitFlash > 0;
     ctx.save(); ctx.translate(s.x, s.y);
     ctx.fillStyle = 'rgba(0,0,0,0.4)';
-    ctx.beginPath(); ctx.ellipse(0, r * 0.7, r, r * 0.5, 0, 0, TAU); ctx.fill();
-    const by = -8, hit = e.hitFlash > 0;
-    ctx.rotate(e.facing);
-    ctx.fillStyle = hexA(col, 0.9);
-    ctx.beginPath(); ctx.moveTo(r + 8, 0); ctx.lineTo(r - 2, -7); ctx.lineTo(r - 2, 7); ctx.closePath(); ctx.fill();
-    ctx.rotate(-e.facing);
-    ctx.fillStyle = hit ? '#fff' : shade(col, -0.15);
-    ctx.beginPath(); ctx.arc(0, by, r, 0, TAU); ctx.fill();
-    ctx.fillStyle = hit ? '#fff' : shade(col, 0.2);
-    ctx.beginPath(); ctx.arc(0, by - 2, r - 4, 0, TAU); ctx.fill();
-    ctx.fillStyle = '#f2d6b3';
-    ctx.beginPath(); ctx.arc(0, by - 3, r - 6, 0, TAU); ctx.fill();
-    this.drawBar(ctx, -r, by - r - 8, r * 2, 5, e.hp / e.maxhp, '#ff7ad0', '#3a0e2a');
-    ctx.fillStyle = '#ff9fe0'; ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'center';
-    ctx.fillText('ライバル冒険者', 0, by - r - 12);
+    ctx.beginPath(); ctx.ellipse(0, r * 0.5, r, r * 0.45, 0, 0, TAU); ctx.fill();
+    this.facingMark(ctx, e.facing, r, col);
+    const topY = hit ? this.blitSprite(ctx, Sprites.flash('monk'), r) : this.blitSprite(ctx, Sprites.player(col), r);
+    this.drawBar(ctx, -r, topY - 8, r * 2, 5, e.hp / e.maxhp, '#ff7ad0', '#3a0e2a');
+    ctx.fillStyle = '#ff9fe0'; ctx.font = 'bold 10px "Cinzel", serif'; ctx.textAlign = 'center';
+    ctx.fillText(ENEMIES.rival.name, 0, topY - 11);
     ctx.restore();
   },
 
@@ -582,16 +577,15 @@ const Render = {
     lctx.setTransform(1, 0, 0, 1, 0, 0);
     lctx.clearRect(0, 0, CONFIG.VIEW_W, CONFIG.VIEW_H);
 
-    // ベースの闇（暖かみのある漆黒）
+    // ベースの闇（マップは最初から見える＝薄め。雰囲気のための陰影のみ）
     lctx.globalCompositeOperation = 'source-over';
-    lctx.fillStyle = 'rgba(7,4,3,0.95)';
+    lctx.fillStyle = 'rgba(7,4,3,0.5)';
     lctx.fillRect(0, 0, CONFIG.VIEW_W, CONFIG.VIEW_H);
 
-    // 既に踏破した「明るい部屋」は記憶として薄く見える
+    // 全ての部屋を可視化（現在地が最も明るい）
     lctx.globalCompositeOperation = 'destination-out';
     for (const r of dgn.rooms) {
-      if (!r.revealed || !r.lit) continue;
-      this.carveRoom(lctx, r, r === game.playerRoom ? 0.95 : 0.6);
+      this.carveRoom(lctx, r, r === game.playerRoom ? 0.96 : (r.lit ? 0.82 : 0.66));
     }
 
     // 固定光源

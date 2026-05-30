@@ -8,6 +8,8 @@ const Input = {
   aimVec: { x: 0, y: 0, len: 0, active: false, ang: 0 },
   fireCallback: null,        // (ang) => {}
   aimChange: null,           // (ang)=>{} 連続狙い用
+  dodgeCallback: null,       // 移動スティックのダブルタップで回避
+  _lastLeftDown: -1e9,
   keys: {},
   mouse: { x: 0, y: 0, down: false },
   R: 70,                     // スティック半径(px)
@@ -49,6 +51,10 @@ const Input = {
     const isLeft = p.x < CONFIG.VIEW_W * 0.46;
     if (isLeft && this.left.id === null) {
       this.left.id = e.pointerId; this.left.ox = p.x; this.left.oy = p.y; this.left.dx = 0; this.left.dy = 0;
+      // ダブルタップで回避
+      const now = performance.now();
+      if (now - this._lastLeftDown < 280 && this.dodgeCallback) this.dodgeCallback();
+      this._lastLeftDown = now;
     } else if (!isLeft && this.right.id === null) {
       this.right.id = e.pointerId; this.right.ox = p.x; this.right.oy = p.y; this.right.dx = 0; this.right.dy = 0;
       this.aimVec.active = true;
@@ -134,8 +140,8 @@ const Input = {
       ctx.beginPath(); ctx.arc(s.ox + s.dx, s.oy + s.dy, this.R * 0.42, 0, TAU); ctx.fill();
       ctx.restore();
     };
-    if (this.left.id === null) drawBase(home.left.x, home.left.y, '#7fbfff', '移動'); else drawStick(this.left, '#7fbfff');
-    if (this.right.id === null) drawBase(home.right.x, home.right.y, '#ff9f6b', '攻撃／狙う'); else drawStick(this.right, '#ff9f6b');
+    if (this.left.id === null) drawBase(home.left.x, home.left.y, '#7fbfff', '移動・二度押で回避'); else drawStick(this.left, '#7fbfff');
+    if (this.right.id === null) drawBase(home.right.x, home.right.y, '#ff9f6b', '攻撃・狙う'); else drawStick(this.right, '#ff9f6b');
     // 右スティック：照準ライン
     if (this.right.id !== null && this.aimVec.len > 0.12) {
       ctx.save(); ctx.globalAlpha = 0.6;

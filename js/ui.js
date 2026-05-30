@@ -77,16 +77,29 @@ const UI = {
     });
   },
 
-  // -------- タウン（拠点） --------
-  showTown(tab = 'status') {
+  // -------- 伽藍（拠点） --------
+  showTown(tab) {
     this.hud.style.display = 'none';
-    const p = Game.profile, d = computeDerived(p);
+    const p = Game.profile;
+    // 初回（道を未だ選んでいない）は「道」タブのみ
+    if (!p) {
+      this.panel(`<div class="town">
+        <div class="town-top"><div class="town-title brand">輪廻 <span>RINNE</span></div><div class="town-gold subtle">― 巡り、堕ち、また還る ―</div></div>
+        <div class="town-nav"><button class="tnav on">修行の道を選べ</button></div>
+        <div class="town-body">${this.tabClass(null)}</div>
+      </div>`);
+      this.bindTab('class');
+      return;
+    }
+    tab = tab || 'status';
+    const d = computeDerived(p);
     Game.derived = d;
     const cls = CLASSES[p.classId];
-    const nav = ['status', 'skill', 'equip', 'forge', 'stash', 'shop', 'bounty', 'deploy'];
-    const navName = { status: 'ステータス', skill: 'スキル', equip: '装備', forge: '鍛冶', stash: '倉庫', shop: 'ショップ', bounty: '依頼', deploy: '出撃' };
+    const nav = ['status', 'class', 'skill', 'equip', 'forge', 'stash', 'shop', 'bounty', 'deploy'];
+    const navName = { status: '己', class: '道', skill: 'スキル', equip: '装備', forge: '鍛冶', stash: '倉庫', shop: 'ショップ', bounty: '請願', deploy: '出立' };
     let body = '';
     if (tab === 'status') body = this.tabStatus(p, d, cls);
+    else if (tab === 'class') body = this.tabClass(p);
     else if (tab === 'skill') body = this.tabSkill(p, d);
     else if (tab === 'equip') body = this.tabEquip(p, d);
     else if (tab === 'forge') body = this.tabForge(p, d);
@@ -97,14 +110,37 @@ const UI = {
 
     this.panel(`<div class="town">
       <div class="town-top">
-        <div class="town-title">拠点 — <b style="color:${cls.color}">${cls.name}</b> <span class="lvl">Lv.${p.level}</span></div>
-        <div class="town-gold">${fmt(p.gold)} G</div>
+        <div class="town-title">伽藍 ― <b style="color:${cls.color}">${cls.name}</b> <span class="lvl">Lv.${p.level}</span></div>
+        <div class="town-gold">${fmt(p.gold)} 文</div>
       </div>
       <div class="town-nav">${nav.map(n => `<button class="tnav ${n === tab ? 'on' : ''}" data-t="${n}">${navName[n]}</button>`).join('')}</div>
       <div class="town-body">${body}</div>
     </div>`);
     this.root.querySelectorAll('.tnav').forEach(b => b.addEventListener('click', () => this.showTown(b.dataset.t)));
     this.bindTab(tab);
+  },
+
+  // -------- 道（職業選択／変更）--------
+  tabClass(p) {
+    let cards = '';
+    for (const id in CLASSES) {
+      const c = CLASSES[id];
+      const wt = WEAPON_TYPES[c.weapon];
+      const cur = p && p.classId === id;
+      cards += `<div class="class-card ${cur ? 'cur' : ''}" style="--ac:${c.color}">
+        <canvas class="cc-av" width="64" height="72" data-cls="${id}"></canvas>
+        <div class="cc-name">${c.name}</div>
+        <div class="cc-weap">得物：${wt.name}</div>
+        <div class="cc-blurb">${c.blurb}</div>
+        <div class="cc-stats">${ATTRS.map(a => `<span>${a.name}${c.base[a.key]}</span>`).join('')}</div>
+        <div class="cc-skills">${c.skills.map(s => `${SKILLS[s].icon} ${SKILLS[s].name}`).join('・')}</div>
+        <button class="btn pick" data-cls="${id}">${cur ? '今この道にあり' : (p ? 'この道へ改める' : 'この道を歩む')}</button>
+      </div>`;
+    }
+    return `<div class="class-tab">
+      ${p ? '' : '<p class="subtitle">六道・十界をさまよう修行の旅。死ねば全てを失い、また人間界へ還る。歩む道を選べ。</p>'}
+      <div class="class-grid">${cards}</div>
+    </div>`;
   },
 
   tabStatus(p, d, cls) {
@@ -123,8 +159,18 @@ const UI = {
       ['回避', Math.round(d.dodge * 100) + '%'], ['吸血', Math.round(d.lifesteal * 100) + '%'],
       ['視界', d.hasTorch ? '広い(トーチ)' : '狭い'],
     ].map(r => `<div class="drow"><span>${r[0]}</span><b>${r[1]}</b></div>`).join('');
+    const eqNames = Object.values(p.equipment).filter(Boolean).map(it => this.rarityTag(it)).join('、') || '—';
     return `<div class="cols">
       <div class="col">
+        <div class="card char-card">
+          <div class="avatar-frame"><canvas id="avatarCanvas" width="84" height="96" class="avatar"></canvas></div>
+          <div class="char-meta">
+            <div class="char-name" style="color:${cls.color}">${cls.name}</div>
+            <div class="char-sub">Lv.${p.level} ・ 得物 ${WEAPON_TYPES[cls.weapon].name}</div>
+            <div class="char-flavor">${cls.blurb}</div>
+            <div class="char-rec">脱出 ${p.runStats.extracts}　頓死 ${p.runStats.deaths}　調伏 ${p.runStats.kills}</div>
+          </div>
+        </div>
         <div class="card">
           <div class="lvbox">Lv.${p.level} <div class="xpbar"><div style="width:${Math.min(100, p.xp / xpNeed * 100)}%"></div></div><span>${p.xp}/${xpNeed} EXP</span></div>
           <div class="points">未割り振りポイント：<b class="${p.points > 0 ? 'hot' : ''}">${p.points}</b></div>
@@ -274,9 +320,24 @@ const UI = {
     </div>`;
   },
 
+  drawAvatarTo(cv, classId) {
+    if (!cv || !cv.getContext || typeof Sprites === 'undefined') return;
+    const ctx = cv.getContext('2d'); ctx.imageSmoothingEnabled = false;
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    const spr = Sprites.player(CLASSES[classId].color);
+    const sc = Math.max(1, Math.floor(Math.min(cv.width / spr._w, cv.height / spr._h)));
+    const w = spr._w * sc, h = spr._h * sc;
+    ctx.drawImage(spr, Math.floor((cv.width - w) / 2), Math.floor((cv.height - h) / 2), w, h);
+  },
+
   bindTab(tab) {
     const p = Game.profile;
     const reload = () => { saveProfile(p); this.showTown(tab); };
+    // 道（職業）選択＋アバター描画
+    this.root.querySelectorAll('.cc-av').forEach(cv => this.drawAvatarTo(cv, cv.dataset.cls));
+    this.root.querySelectorAll('.pick').forEach(b => b.addEventListener('click', () => Game.chooseClass(b.dataset.cls)));
+    const av = this.root.querySelector('#avatarCanvas');
+    if (av && p) this.drawAvatarTo(av, p.classId);
     // ステータス＋
     this.root.querySelectorAll('.plus').forEach(b => b.addEventListener('click', () => {
       if (p.points > 0) { p.baseAttrs[b.dataset.a]++; p.points--; reload(); }
@@ -413,7 +474,7 @@ const UI = {
     if (ht) ht.textContent = `${Math.max(0, Math.round(p.hp))}/${Math.round(d.hpmax)}`;
     if (mt) mt.textContent = `${Math.round(p.mp)}/${Math.round(d.mpmax)}`;
     const info = document.getElementById('runinfo');
-    if (info) info.textContent = `地下${game.floor}階　撃破 ${game.run.kills}　戦利品 ${game.run.loot.length}　金 ${game.run.gold}`;
+    if (info) info.textContent = `${realmName(game.floor)}（${game.floor}）　撃破 ${game.run.kills}　戦利品 ${game.run.loot.length}　金 ${game.run.gold}`;
     const db = document.getElementById('dodgebtn');
     if (db) db.classList.toggle('cool', p.dodgeCd > 0);
     const ib = document.getElementById('interactbtn');
@@ -486,7 +547,7 @@ const UI = {
       </div>
       <div class="card"><h3>${win ? '持ち帰った戦利品' : '失われた戦利品'}</h3>${lootHtml}</div>
       ${lostHtml}
-      <button class="btn big totown">拠点へ戻る</button>
+      <button class="btn big totown">伽藍へ還る</button>
     </div>`);
     this.root.querySelector('.totown').addEventListener('click', () => Game.goTown());
   },

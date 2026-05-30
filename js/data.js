@@ -2,6 +2,13 @@
 // data.js — 職業 / スキル / 武器 / アイテム / 敵 のデータベース
 // ============================================================
 
+// --- 十界／六道（潜るほど堕ちていく世界）---
+const REALMS = ['人間界', '修羅界', '畜生界', '餓鬼界', '地獄界', '等活地獄', '黒縄地獄', '衆合地獄', '叫喚地獄', '無間地獄'];
+function realmName(depth) {
+  if (depth >= 1 && depth <= REALMS.length) return REALMS[depth - 1];
+  return '無間地獄 其ノ' + (depth - REALMS.length + 1);
+}
+
 // --- 武器カテゴリ（標準武器のノーマル攻撃を定義） ---
 // scaling: どの一次ステータスでダメージが伸びるか
 const WEAPON_TYPES = {
@@ -78,47 +85,47 @@ const CLASS_SKILL_POOL = {
 // --- 職業 ---
 const CLASSES = {
   fighter: {
-    name: 'ファイター', color: '#d9c27a', weapon: 'sword', blurb: 'バランス型の近接万能職。扱いやすい。',
+    name: '武僧', color: '#d9c27a', weapon: 'sword', blurb: '戒律に生きる拳と剣の僧。攻守に隙のない万能の修行者。',
     base: { STR: 14, VIG: 13, AGI: 10, DEX: 10, WILL: 7, WIS: 8, LUCK: 8 },
     skills: ['slash_wave', 'shield_wall'],
   },
   barbarian: {
-    name: 'バーバリアン', color: '#c0683a', weapon: 'hammer', blurb: '高HP高火力・低速の脳筋。一撃が重い。',
+    name: '金剛', color: '#c0683a', weapon: 'hammer', blurb: '怒りの形相で魔を打ち砕く力士。一撃が地を揺らす。',
     base: { STR: 17, VIG: 16, AGI: 7, DEX: 8, WILL: 5, WIS: 6, LUCK: 8 },
     skills: ['whirlwind', 'reckless'],
   },
   ranger: {
-    name: 'レンジャー', color: '#6fae5a', weapon: 'bow', blurb: '遠距離物理。カイトで安全に削る。',
+    name: '修験者', color: '#6fae5a', weapon: 'bow', blurb: '山に伏す行者。弓と歩法で間合いを制し魔を射抜く。',
     base: { STR: 9, VIG: 10, AGI: 13, DEX: 16, WILL: 7, WIS: 8, LUCK: 9 },
     skills: ['multishot', 'piercing'],
   },
   rogue: {
-    name: 'ローグ', color: '#7b6bb0', weapon: 'dagger', blurb: '高速・会心特化の暗殺者。背後から刺す。',
+    name: '夜叉', color: '#7b6bb0', weapon: 'dagger', blurb: '闇を駆ける鬼神の眷属。背後より急所を貫く。',
     base: { STR: 11, VIG: 9, AGI: 16, DEX: 14, WILL: 7, WIS: 7, LUCK: 12 },
     skills: ['dash_strike', 'poison_dart'],
   },
   cleric: {
-    name: 'クレリック', color: '#e7d9a0', weapon: 'mace', blurb: '回復と聖法。粘り強く対アンデッド。',
+    name: '法師', color: '#e7d9a0', weapon: 'mace', blurb: '読経と聖法で衆生を癒す僧。亡者・邪鬼に強い。',
     base: { STR: 12, VIG: 13, AGI: 8, DEX: 8, WILL: 11, WIS: 14, LUCK: 8 },
     skills: ['heal', 'smite'],
   },
   mage: {
-    name: 'メイジ', color: '#6aa9ff', weapon: 'staff', blurb: '高火力魔法・低耐久。MP管理が鍵。',
+    name: '陰陽師', color: '#6aa9ff', weapon: 'staff', blurb: '式と呪を操る術者。高威力の術と引き換えに脆い。',
     base: { STR: 7, VIG: 8, AGI: 9, DEX: 8, WILL: 18, WIS: 12, LUCK: 9 },
     skills: ['firebolt', 'frost_nova'],
   },
   paladin: {
-    name: 'パラディン', color: '#f0e2a8', weapon: 'flail', blurb: '重装の聖騎士。スタンと聖法で前線を支配。',
+    name: '仁王', color: '#f0e2a8', weapon: 'flail', blurb: '寺門を守る金剛力士。打撃で魔を鎮め聖光をまとう。',
     base: { STR: 14, VIG: 15, AGI: 7, DEX: 8, WILL: 9, WIS: 12, LUCK: 7 },
     skills: ['shield_bash', 'smite'],
   },
   warlock: {
-    name: 'ウォーロック', color: '#a05bd6', weapon: 'tome', blurb: '闇の魔導士。吸命と呪いで粘り強く削る。',
+    name: '怨術師', color: '#a05bd6', weapon: 'tome', blurb: '禁断の呪詛を能くする外法者。吸命と呪いで蝕む。',
     base: { STR: 8, VIG: 11, AGI: 9, DEX: 8, WILL: 16, WIS: 11, LUCK: 9 },
     skills: ['life_drain', 'curse_nova'],
   },
   lancer: {
-    name: 'ランサー', color: '#5ab0a0', weapon: 'spear', blurb: '間合いの長い槍使い。突進と刺突で制圧。',
+    name: '韋駄天', color: '#5ab0a0', weapon: 'spear', blurb: '俊足の護法神。槍の間合いと突進で魔を薙ぐ。',
     base: { STR: 13, VIG: 12, AGI: 13, DEX: 13, WILL: 7, WIS: 7, LUCK: 9 },
     skills: ['charge', 'impale'],
   },
@@ -227,21 +234,21 @@ const ELITE_MODS = [
 // --- 敵 ---
 // behavior: melee / ranged ; speed: px/s
 const ENEMIES = {
-  skeleton:   { name: 'スケルトン', hp: 34, atk: 9, def: 3, speed: 78, r: 14, behavior: 'melee', range: 48, sight: 360, color: '#dfe2e6', xp: 14, undead: true, gold: [2, 8] },
-  skel_archer:{ name: 'スケルトン弓兵', hp: 26, atk: 11, def: 2, speed: 64, r: 14, behavior: 'ranged', range: 420, sight: 460, projSpeed: 360, color: '#c9d6c0', xp: 18, undead: true, gold: [3, 10] },
-  zombie:     { name: 'ゾンビ', hp: 70, atk: 13, def: 4, speed: 42, r: 16, behavior: 'melee', range: 50, sight: 300, color: '#7c9a6b', xp: 20, undead: true, gold: [2, 7] },
-  slime:      { name: 'スライム', hp: 28, atk: 7, def: 1, speed: 56, r: 15, behavior: 'melee', range: 44, sight: 280, color: '#5fd3c0', xp: 10, split: true, gold: [1, 5] },
-  bat:        { name: 'コウモリ', hp: 16, atk: 6, def: 0, speed: 130, r: 11, behavior: 'melee', range: 36, sight: 340, color: '#6b5b8a', xp: 9, gold: [1, 4] },
-  goblin:     { name: 'ゴブリン', hp: 40, atk: 12, def: 3, speed: 92, r: 14, behavior: 'melee', range: 46, sight: 380, color: '#7faf55', xp: 16, gold: [4, 14] },
-  warlock:    { name: 'ダークメイジ', hp: 44, atk: 16, def: 3, speed: 60, r: 14, behavior: 'ranged', range: 480, sight: 500, projSpeed: 320, color: '#b061ff', xp: 26, magic: true, gold: [8, 22] },
-  spider:     { name: '大蜘蛛', hp: 32, atk: 9, def: 2, speed: 104, r: 14, behavior: 'melee', range: 44, sight: 360, color: '#6b4a6b', xp: 15, web: true, gold: [3, 9] },
-  skel_knight:{ name: 'スケルトン騎士', hp: 96, atk: 17, def: 9, speed: 70, r: 16, behavior: 'melee', range: 52, sight: 400, color: '#b9c0cc', xp: 30, undead: true, gold: [10, 26] },
-  imp:        { name: 'インプ', hp: 18, atk: 11, def: 1, speed: 116, r: 11, behavior: 'ranged', range: 380, sight: 420, projSpeed: 420, color: '#e0593c', xp: 14, magic: true, gold: [4, 12] },
-  wraith:     { name: '幽鬼', hp: 42, atk: 15, def: 3, speed: 122, r: 14, behavior: 'ranged', range: 420, sight: 480, projSpeed: 360, color: '#7fb0c0', xp: 24, undead: true, magic: true, gold: [6, 18] },
+  skeleton:   { name: '骸骨', hp: 34, atk: 9, def: 3, speed: 78, r: 14, behavior: 'melee', range: 48, sight: 360, color: '#dfe2e6', xp: 14, undead: true, gold: [2, 8] },
+  skel_archer:{ name: '骸の射手', hp: 26, atk: 11, def: 2, speed: 64, r: 14, behavior: 'ranged', range: 420, sight: 460, projSpeed: 360, color: '#c9d6c0', xp: 18, undead: true, gold: [3, 10] },
+  zombie:     { name: '亡者', hp: 70, atk: 13, def: 4, speed: 42, r: 16, behavior: 'melee', range: 50, sight: 300, color: '#7c9a6b', xp: 20, undead: true, gold: [2, 7] },
+  slime:      { name: '不浄の塊', hp: 28, atk: 7, def: 1, speed: 56, r: 15, behavior: 'melee', range: 44, sight: 280, color: '#5fd3c0', xp: 10, split: true, gold: [1, 5] },
+  bat:        { name: '冥蝙蝠', hp: 16, atk: 6, def: 0, speed: 130, r: 11, behavior: 'melee', range: 36, sight: 340, color: '#6b5b8a', xp: 9, gold: [1, 4] },
+  goblin:     { name: '小鬼', hp: 40, atk: 12, def: 3, speed: 92, r: 14, behavior: 'melee', range: 46, sight: 380, color: '#7faf55', xp: 16, gold: [4, 14] },
+  warlock:    { name: '邪法の亡霊', hp: 44, atk: 16, def: 3, speed: 60, r: 14, behavior: 'ranged', range: 480, sight: 500, projSpeed: 320, color: '#b061ff', xp: 26, magic: true, gold: [8, 22] },
+  spider:     { name: '土蜘蛛', hp: 32, atk: 9, def: 2, speed: 104, r: 14, behavior: 'melee', range: 44, sight: 360, color: '#6b4a6b', xp: 15, web: true, gold: [3, 9] },
+  skel_knight:{ name: '骸骨武者', hp: 96, atk: 17, def: 9, speed: 70, r: 16, behavior: 'melee', range: 52, sight: 400, color: '#b9c0cc', xp: 30, undead: true, gold: [10, 26] },
+  imp:        { name: '火の小鬼', hp: 18, atk: 11, def: 1, speed: 116, r: 11, behavior: 'ranged', range: 380, sight: 420, projSpeed: 420, color: '#e0593c', xp: 14, magic: true, gold: [4, 12] },
+  wraith:     { name: '怨霊', hp: 42, atk: 15, def: 3, speed: 122, r: 14, behavior: 'ranged', range: 420, sight: 480, projSpeed: 360, color: '#7fb0c0', xp: 24, undead: true, magic: true, gold: [6, 18] },
   // ボス
-  lich:       { name: '【ボス】リッチ王', hp: 360, atk: 22, def: 8, speed: 70, r: 22, behavior: 'ranged', range: 520, sight: 700, projSpeed: 380, color: '#caa6ff', xp: 160, undead: true, boss: true, gold: [120, 240] },
-  ogre:       { name: '【ボス】オーガ', hp: 480, atk: 28, def: 10, speed: 84, r: 26, behavior: 'melee', range: 70, sight: 600, color: '#a05a3a', xp: 180, boss: true, gold: [140, 280] },
-  necromancer:{ name: '【ボス】ネクロマンサー', hp: 420, atk: 20, def: 7, speed: 66, r: 22, behavior: 'ranged', range: 500, sight: 720, projSpeed: 360, color: '#7d5bd6', xp: 200, undead: true, boss: true, summon: true, gold: [150, 300] },
+  lich:       { name: '【閻魔大王】', hp: 360, atk: 22, def: 8, speed: 70, r: 22, behavior: 'ranged', range: 520, sight: 700, projSpeed: 380, color: '#caa6ff', xp: 160, undead: true, boss: true, gold: [120, 240] },
+  ogre:       { name: '【牛頭鬼】', hp: 480, atk: 28, def: 10, speed: 84, r: 26, behavior: 'melee', range: 70, sight: 600, color: '#a05a3a', xp: 180, boss: true, gold: [140, 280] },
+  necromancer:{ name: '【馬頭鬼】', hp: 420, atk: 20, def: 7, speed: 66, r: 22, behavior: 'ranged', range: 500, sight: 720, projSpeed: 360, color: '#7d5bd6', xp: 200, undead: true, boss: true, summon: true, gold: [150, 300] },
   // ライバル冒険者（PvPvE風味：徘徊し、敵と戦い戦利品を奪い合う）
-  rival:      { name: 'ライバル冒険者', hp: 130, atk: 17, def: 6, speed: 122, r: 14, behavior: 'rival', range: 380, sight: 520, projSpeed: 560, color: '#d0d0d0', xp: 90, rival: true, gold: [30, 70] },
+  rival:      { name: '迷いの行者', hp: 130, atk: 17, def: 6, speed: 122, r: 14, behavior: 'rival', range: 380, sight: 520, projSpeed: 560, color: '#d0d0d0', xp: 90, rival: true, gold: [30, 70] },
 };

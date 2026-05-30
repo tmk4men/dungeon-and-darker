@@ -25,36 +25,46 @@ const Game = {
     Input.init(document.getElementById('game'));
     UI.init();
     this.profile = loadProfile();
-    if (this.profile) { this.derived = computeDerived(this.profile); this.goTown(); }
-    else this.goClassSelect();
+    this.goTown();
     this.lastT = performance.now();
     requestAnimationFrame(t => this.loop(t));
   },
 
-  goClassSelect() { this.state = 'class_select'; Input.enabled = false; UI.showClassSelect(); },
-
-  createCharacter(classId) {
-    this.profile = newProfile(classId);
+  // 修行の道（職業）を選ぶ／変える
+  chooseClass(classId) {
+    if (this.profile && this.profile.classId === classId) { this.goTown('status'); return; }
+    if (this.profile) {
+      if (!confirm('修行の道を改めますか？\nレベル・ステータス・装備は新たな道のものに改まります（所持金と倉庫は引き継ぎ）。')) return;
+      const gold = this.profile.gold, stash = this.profile.stash, bounties = this.profile.bounties, ach = this.profile.achievements;
+      this.profile = newProfile(classId);
+      this.profile.gold = gold; this.profile.stash = stash; this.profile.bounties = bounties; this.profile.achievements = ach;
+    } else {
+      this.profile = newProfile(classId);
+    }
+    Audio2.play && Audio2.play('levelup');
     this.derived = computeDerived(this.profile);
     saveProfile(this.profile);
-    this.goTown();
+    this.goTown('status');
   },
+  createCharacter(classId) { this.chooseClass(classId); },
 
-  goTown() {
+  goTown(tab) {
     this.state = 'town';
     Input.enabled = false; Input.reset();
-    // 旧セーブの移行
-    if (!this.profile.achievements) this.profile.achievements = {};
-    if (!this.profile.bounties) this.profile.bounties = [];
-    if (!this.profile.runStats.elites) this.profile.runStats.elites = 0;
-    if (!this.profile.loadout) this.profile.loadout = [...CLASSES[this.profile.classId].skills];
-    if (this.profile.bounties.length < 3) {
-      const need = 3 - this.profile.bounties.length;
-      this.profile.bounties.push(...generateBounties().slice(0, need));
+    if (this.profile) {
+      // 旧セーブの移行
+      if (!this.profile.achievements) this.profile.achievements = {};
+      if (!this.profile.bounties) this.profile.bounties = [];
+      if (!this.profile.runStats.elites) this.profile.runStats.elites = 0;
+      if (!this.profile.loadout) this.profile.loadout = [...CLASSES[this.profile.classId].skills];
+      if (this.profile.bounties.length < 3) {
+        const need = 3 - this.profile.bounties.length;
+        this.profile.bounties.push(...generateBounties().slice(0, need));
+      }
+      this.derived = computeDerived(this.profile);
+      saveProfile(this.profile);
     }
-    this.derived = computeDerived(this.profile);
-    saveProfile(this.profile);
-    UI.showTown();
+    UI.showTown(this.profile ? (tab || 'status') : 'class');
   },
 
   // ---------- ダンジョン突入（深度1から。階段で潜るほど難化＆高レア化） ----------
@@ -81,9 +91,10 @@ const Game = {
     Input.enabled = true; Input.reset();
     Input.fireCallback = (ang) => this.onFire(ang);
     Input.aimChange = (ang) => { this.player.facing = ang; };
+    Input.dodgeCallback = () => this.dodge();
     UI.showHUD();
     UI.buildSkillBar(this);
-    this.toast('ダンジョンへ潜入 — 生きて脱出せよ');
+    this.toast(realmName(this.floor) + 'へ踏み入る — 生きて還れ');
   },
 
   // 現在の深度でレベルを生成（プレイヤー状態は維持）
@@ -110,7 +121,7 @@ const Game = {
     this.player.derived = this.derived;
     this.buildLevel();
     Audio2.play('door');
-    this.toast('地下' + this.floor + '階へ降りた — 敵もお宝も手強くなる');
+    this.toast(realmName(this.floor) + 'へ堕ちた — 魔も宝も深まる');
   },
 
   makeEnemy(type, x, y, forceElite) {
@@ -210,8 +221,8 @@ const Game = {
     // キーボード操作（スキル選択・ポーション・発射）
     this.handleKeys(dt);
 
-    // 扉・拾得・宝箱・部屋リビール
-    this.updateDoors();
+    // 扉・宝箱は時間をかけて開ける（チャネル）／拾得・部屋リビール
+    this.updateChannel(dt);
     this.playerRoom = roomAt(this.dgn, p.x, p.y);
     if (this.playerRoom && !this.playerRoom.revealed) this.playerRoom.revealed = true;
     this.updatePickups();
@@ -704,46 +715,58 @@ const Game = {
     return true;
   },
 
-  // ---------- 扉 / 拾得 / 宝箱 / ポータル ----------
-  updateDoors() {
+  // ---------- 扉/宝箱（時間をかけて開ける）/ 拾得 / ポータル ----------
+  updateChannel(dt) {
     const p = this.player, T = CONFIG.TILE;
+    let target = null, best = 1e9;
+    // 宝箱
+    for (const c of this.chests) {
+      if (c.opened) continue;
+      const dd = dist(p.x, p.y, c.x, c.y);
+      if (dd < c.r + CONFIG.PLAYER_R + 14 && dd < best) { best = dd; target = { key: 'c' + (c._id || (c._id = uid())), x: c.x, y: c.y, time: 1.6, kind: 'chest', obj: c, label: '開封中' }; }
+    }
+    // 扉（隣接の閉扉）
     const ptx = Math.floor(p.x / T), pty = Math.floor(p.y / T);
     for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
       const tx = ptx + dx, ty = pty + dy;
       if (this.dgn.get(tx, ty) === T_DOOR) {
-        const cx = (tx + 0.5) * T, cy = (ty + 0.5) * T;
-        if (dist(p.x, p.y, cx, cy) < T * 1.0) {
-          this.dgn.set(tx, ty, T_DOOROPEN);
-          this.revealRoomsNearDoor(tx, ty);
-          Audio2.play('door');
-          this.toast('扉を開けた');
-        }
+        const cx = (tx + 0.5) * T, cy = (ty + 0.5) * T, dd = dist(p.x, p.y, cx, cy);
+        if (dd < T * 1.05 && dd < best) { best = dd; target = { key: 'd' + tx + ',' + ty, x: cx, y: cy, time: 0.9, kind: 'door', tx, ty, label: '開錠中' }; }
       }
+    }
+    if (!target) { this.channel = null; return; }
+    if (!this.channel || this.channel.key !== target.key) this.channel = { key: target.key, prog: 0, time: target.time, kind: target.kind, label: target.label };
+    this.channel.x = target.x; this.channel.y = target.y;
+    this.channel.prog += dt / this.channel.time;
+    if (this.channel.prog >= 1) {
+      if (target.kind === 'chest') this.openChest(target.obj);
+      else this.openDoor(target.tx, target.ty);
+      this.channel = null;
     }
   },
 
-  revealRoomsNearDoor(tx, ty) {
+  openDoor(tx, ty) {
+    this.dgn.set(tx, ty, T_DOOROPEN);
     for (const r of this.dgn.rooms) {
       if (tx >= r.x - 1 && tx <= r.x + r.w && ty >= r.y - 1 && ty <= r.y + r.h) r.revealed = true;
     }
+    Audio2.play('door');
+    this.toast('扉を開けた');
+  },
+
+  openChest(c) {
+    c.opened = true;
+    this.toast('宝箱を開けた');
+    Audio2.play('chest');
+    this.burst(c.x, c.y, '#ffd27a', 18);
+    for (let i = 0; i < c.loot; i++) {
+      this.groundItems.push({ x: c.x + rand(-18, 18), y: c.y + rand(-18, 18), item: randomLoot(this.floor, this.derived.attr.LUCK) });
+    }
+    if (chance(0.5)) this.run.gold += randInt(8, 30);
   },
 
   updatePickups() {
     const p = this.player;
-    // 宝箱
-    for (const c of this.chests) {
-      if (c.opened) continue;
-      if (dist(p.x, p.y, c.x, c.y) < 40) {
-        c.opened = true;
-        this.toast('宝箱を開けた！');
-        Audio2.play('chest');
-        this.burst(c.x, c.y, '#ffd27a', 18);
-        for (let i = 0; i < c.loot; i++) {
-          this.groundItems.push({ x: c.x + rand(-18, 18), y: c.y + rand(-18, 18), item: randomLoot(this.floor, this.derived.attr.LUCK) });
-        }
-        if (chance(0.5)) this.run.gold += randInt(8, 30);
-      }
-    }
     // 地上アイテム
     for (let i = this.groundItems.length - 1; i >= 0; i--) {
       const g = this.groundItems[i];

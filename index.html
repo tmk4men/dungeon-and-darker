@@ -6,10 +6,10 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#0c0a08">
-<title>Dungeon &amp; Darker</title>
+<title>輪廻 -RINNE-</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=Cinzel+Decorative:wght@700;900&family=Shippori+Mincho+B1:wght@600;700;800&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=Yuji+Syuku&family=Shippori+Mincho+B1:wght@500;600;700;800&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
 <link rel="manifest" href="manifest.json">
 <link rel="stylesheet" href="css/style.css">
 </head>
@@ -36,9 +36,7 @@
       <div id="extract"></div>
       <!-- 右下：スキル＆ポーション -->
       <div id="skillbar"></div>
-      <!-- 回避ローリング -->
-      <button id="dodgebtn" class="dodgebtn">回避<span>ROLL</span></button>
-      <!-- 祭壇/聖域 インタラクト -->
+      <!-- 祭壇/聖域/階段 インタラクト -->
       <button id="interactbtn" class="interactbtn">祈る</button>
       <!-- 操作ヒント -->
       <div class="hint left-hint">移動</div>
@@ -65,6 +63,7 @@
   <script src="js/items.js"></script>
   <script src="js/save.js"></script>
   <script src="js/map.js"></script>
+  <script src="js/sprites.js"></script>
   <script src="js/render.js"></script>
   <script src="js/input.js"></script>
   <script src="js/ui.js"></script>
@@ -74,9 +73,6 @@
     document.getElementById('abandon').addEventListener('click', () => {
       if (Game.state === 'dungeon' && confirm('退却しますか？（持ち込んだ装備・戦利品を失います）')) Game.abandon();
     });
-    // 回避ローリング
-    const dodgeBtn = document.getElementById('dodgebtn');
-    dodgeBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); Game.dodge(); });
     // 祭壇インタラクト
     document.getElementById('interactbtn').addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); Game.interact(); });
     // ミュート
