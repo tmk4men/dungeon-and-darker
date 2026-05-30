@@ -299,6 +299,12 @@ const UI = {
     if (mt) mt.textContent = `${Math.round(p.mp)}/${Math.round(d.mpmax)}`;
     const info = document.getElementById('runinfo');
     if (info) info.textContent = `第${game.floor}層　撃破 ${game.run.kills}　戦利品 ${game.run.loot.length}　💰${game.run.gold}`;
+    const zi = document.getElementById('zoneinfo');
+    if (zi && game.zone) {
+      const t = game.runTime, z = game.zone;
+      if (t < z.grace) { zi.textContent = `🌑 闇の侵食まで ${Math.ceil(z.grace - t)}秒`; zi.className = 'zoneinfo'; }
+      else { zi.textContent = '⚠ 闇が迫っている — 脱出せよ'; zi.className = 'zoneinfo warn'; }
+    }
     // クールダウン表示更新（軽量に再描画）
     const bar = document.getElementById('skillbar');
     if (bar) {

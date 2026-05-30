@@ -54,6 +54,7 @@ const Game = {
     this.run = { loot: [], kills: 0, gold: 0, startGold: this.profile.gold };
     this.selectedSkill = -1;
     this.projectiles = []; this.particles = []; this.floatTexts = []; this.extractT = 0;
+    this.runTime = 0;
 
     // プレイヤー生成（持ち込み装備のスナップショット）
     const d = this.derived;
@@ -61,6 +62,7 @@ const Game = {
       x: this.dgn.startX, y: this.dgn.startY, vx: 0, vy: 0, facing: -Math.PI / 2,
       hp: d.hpmax, mp: d.mpmax, derived: d, classId: this.profile.classId,
       skillCd: [0, 0], attackCd: 0, potionCd: 0, invuln: 0, buffs: [], dead: false,
+      slowT: 0, slowMul: 1, zoneTick: 0,
       skills: CLASSES[this.profile.classId].skills, potions: this.profile.potions.map(p => p ? { ...p } : null),
     };
 
@@ -68,6 +70,9 @@ const Game = {
     this.enemies = this.dgn.enemySpawns.map(sp => this.makeEnemy(sp.type, sp.x, sp.y));
     this.groundItems = this.dgn.groundItems.slice();
     this.chests = this.dgn.chests.slice();
+    this.traps = this.dgn.traps.slice();
+    this.initZone();
+    Audio2.init();
 
     this.state = 'dungeon';
     Input.enabled = true; Input.reset();
@@ -87,6 +92,7 @@ const Game = {
       atk: def.atk * sc, def: def.def, speed: def.speed,
       r: def.r, state: 'idle', atkCd: rand(0, 1), wanderT: 0, wanderAng: rand(0, TAU),
       hitFlash: 0, dead: false, slowT: 0, slowMul: 1, dotT: 0, dotDmg: 0, knockX: 0, knockY: 0,
+      stunT: 0, summonCd: rand(4, 7),
     };
   },
 
@@ -119,6 +125,7 @@ const Game = {
     // 移動
     let sp = d.speed;
     for (const b of p.buffs) if (b.stat === 'speed') sp *= b.mult;
+    if (p.slowT > 0) { p.slowT -= dt; sp *= p.slowMul; }
     let mx = Input.move.x, my = Input.move.y;
     const ml = len(mx, my);
     if (ml > 0.05) {
@@ -146,6 +153,9 @@ const Game = {
     if (this.playerRoom && !this.playerRoom.revealed) this.playerRoom.revealed = true;
     this.updatePickups();
     this.updatePortal(dt);
+    this.updateTraps(dt);
+    this.runTime += dt;
+    this.updateZone(dt);
 
     // 敵
     for (const e of this.enemies) if (!e.dead) this.updateEnemy(e, dt);
@@ -196,12 +206,14 @@ const Game = {
     const power = attackPower(d, wt.scaling);
     if (wt.kind === 'melee') {
       this.meleeSwing(p.x, p.y, ang, wt.range, wt.arc, power, { crit: d.crit, critDmg: d.critDmg, knock: wt.knock || 0, color: wt.color });
+      Audio2.play('swing');
     } else {
       // ranged/magic：投射
       this.spawnProjectile('player', p.x, p.y, ang, {
         speed: wt.projSpeed, dmg: power, r: wt.kind === 'magic' ? 9 : 7,
         color: wt.color, crit: d.crit, critDmg: d.critDmg, life: 1.2,
       });
+      Audio2.play(wt.kind === 'magic' ? 'magic' : 'shoot');
     }
     this.muzzle(p.x, p.y, ang, wt.color);
   },
@@ -212,7 +224,8 @@ const Game = {
     if (p.mp < s.mp) { this.toast('MPが足りない'); return false; }
     p.mp -= s.mp; p.skillCd[slot] = s.cd;
     const power = s.scaling ? attackPower(d, s.scaling) * s.dmg : 0;
-    const opt = { crit: d.crit, critDmg: d.critDmg, color: s.color, holy: s.holy, dot: s.dot, slow: s.slow, knock: s.knock || 0 };
+    const opt = { crit: d.crit, critDmg: d.critDmg, color: s.color, holy: s.holy, dot: s.dot, slow: s.slow, knock: s.knock || 0, lifesteal: s.lifesteal, stun: s.stun };
+    Audio2.play(s.kind === 'heal' ? 'heal' : s.kind === 'buff' ? 'potion' : 'magic');
 
     if (s.kind === 'projectile') {
       const count = s.count || 1, spread = s.spread || 0;
@@ -283,6 +296,7 @@ const Game = {
       r: o.r || 8, color: o.color || '#fff', dmg: o.dmg || 5,
       pierce: o.pierce || 0, hits: new Set(), explode: o.explode || 0,
       dot: o.dot, slow: o.slow, holy: o.holy, knock: o.knock || 0,
+      lifesteal: o.lifesteal, stun: o.stun,
       crit: o.crit || 0, critDmg: o.critDmg || 1.5, life: o.life || 1.5, maxlife: o.life || 1.5,
     });
   },
@@ -333,8 +347,15 @@ const Game = {
     if (opt.dot) { e.dotT = opt.dot.dur; e.dotDmg = opt.dot.dmg; }
     if (opt.slow) { e.slowT = opt.slow.dur; e.slowMul = opt.slow.mult; }
     if (opt.knock) { e.knockX += Math.cos(ang) * opt.knock; e.knockY += Math.sin(ang) * opt.knock; }
+    if (opt.stun) { e.stunT = Math.max(e.stunT, def.boss ? opt.stun * 0.4 : opt.stun); }
+    if (opt.lifesteal) {
+      const heal = dmg * opt.lifesteal;
+      this.player.hp = Math.min(this.player.derived.hpmax, this.player.hp + heal);
+      this.addFloat(this.player.x, this.player.y - 24, '+' + Math.round(heal), '#ff6ea0', 14);
+    }
     this.addFloat(e.x, e.y - e.r - 6, '' + dmg, crit ? '#ffd24a' : '#ffffff', crit ? 22 : 15);
     if (crit) this.burst(e.x, e.y, '#ffd24a', 6);
+    Audio2.play(crit ? 'crit' : 'hit');
     if (e.hp <= 0) this.killEnemy(e);
   },
 
@@ -343,6 +364,7 @@ const Game = {
     e.dead = true; e.deathT = 0;
     const def = ENEMIES[e.type];
     this.burst(e.x, e.y, def.color, 16);
+    Audio2.play(def.boss ? 'bossdie' : 'die');
     this.run.kills++;
     // ゴールド
     const g = randInt(def.gold[0], def.gold[1]);
@@ -378,6 +400,7 @@ const Game = {
     p.hp -= dmg; p.invuln = 0.25;
     this.addFloat(p.x, p.y - 26, '-' + dmg, '#ff6a5a', 17);
     UI.flashDamage();
+    Audio2.play('hurt');
   },
 
   // ---------- 敵AI ----------
@@ -396,6 +419,8 @@ const Game = {
     // スロー
     let spd = e.speed;
     if (e.slowT > 0) { e.slowT -= dt; spd *= e.slowMul; }
+    // スタン中は行動不能
+    if (e.stunT > 0) { e.stunT -= dt; return; }
 
     const dd = dist(e.x, e.y, p.x, p.y);
     const aggro = dd < def.sight && this.hasLoS(e.x, e.y, p.x, p.y);
@@ -412,7 +437,10 @@ const Game = {
         }
       } else {
         if (dd > def.range) this.moveEnemy(e, e.facing, spd, dt);
-        else if (e.atkCd <= 0) { e.atkCd = 1.0; this.hurtPlayer(e.atk, false); this.burst(p.x, p.y, '#ff8a6a', 6); }
+        else if (e.atkCd <= 0) {
+          e.atkCd = 1.0; this.hurtPlayer(e.atk, false); this.burst(p.x, p.y, '#ff8a6a', 6);
+          if (def.web) { p.slowT = 2; p.slowMul = 0.55; this.addFloat(p.x, p.y - 30, '🕸 鈍足', '#b0d0a0', 13); }
+        }
       }
       if (dd > def.sight * 1.4) e.state = 'idle';
     } else {
@@ -420,6 +448,22 @@ const Game = {
       e.wanderT -= dt;
       if (e.wanderT <= 0) { e.wanderT = rand(0.8, 2.2); e.wanderAng = rand(0, TAU); e.moving = chance(0.6); }
       if (e.moving) { this.moveEnemy(e, e.wanderAng, spd * 0.4, dt); e.facing = e.wanderAng; }
+    }
+    // ネクロマンサー：スケルトン召喚
+    if (def.summon && e.state === 'chase') {
+      e.summonCd -= dt;
+      const alive = this.enemies.reduce((n, x) => n + (x.dead ? 0 : 1), 0);
+      if (e.summonCd <= 0 && alive < 28) {
+        e.summonCd = 7;
+        this.toast('ネクロマンサーが死霊を呼んだ！');
+        for (let i = 0; i < 2; i++) {
+          const minion = this.makeEnemy(chance(0.5) ? 'skeleton' : 'skel_archer', e.x + rand(-40, 40), e.y + rand(-40, 40));
+          minion.state = 'chase';
+          this.enemies.push(minion);
+        }
+        this.burst(e.x, e.y, '#9b4dff', 18);
+        Audio2.play('magic');
+      }
     }
   },
 
@@ -452,6 +496,7 @@ const Game = {
         if (dist(p.x, p.y, cx, cy) < T * 1.0) {
           this.dgn.set(tx, ty, T_DOOROPEN);
           this.revealRoomsNearDoor(tx, ty);
+          Audio2.play('door');
           this.toast('扉を開けた');
         }
       }
@@ -472,6 +517,7 @@ const Game = {
       if (dist(p.x, p.y, c.x, c.y) < 40) {
         c.opened = true;
         this.toast('宝箱を開けた！');
+        Audio2.play('chest');
         this.burst(c.x, c.y, '#ffd27a', 18);
         for (let i = 0; i < c.loot; i++) {
           this.groundItems.push({ x: c.x + rand(-18, 18), y: c.y + rand(-18, 18), item: randomLoot(this.floor, this.derived.attr.LUCK) });
@@ -509,6 +555,65 @@ const Game = {
     }
   },
 
+  // ---------- トラップ ----------
+  updateTraps(dt) {
+    const p = this.player, T = CONFIG.TILE;
+    for (const tr of this.traps) {
+      if (tr.type === 'spike') {
+        const prev = tr.armed;
+        tr.phase = (tr.phase + dt) % tr.period;
+        // 0.0〜0.4 を「発動中」、その前0.35を予兆とする
+        tr.armed = tr.phase < 0.4;
+        if (tr.armed && !prev) {
+          Audio2.play('trap');
+          // 同タイルに居る者へダメージ
+          if (!p.dead && Math.floor(p.x / T) === tr.tx && Math.floor(p.y / T) === tr.ty) this.hurtPlayer(tr.dmg, false);
+          for (const e of this.enemies) if (!e.dead && Math.floor(e.x / T) === tr.tx && Math.floor(e.y / T) === tr.ty) this.hitEnemy(e, tr.dmg, 0, { crit: 0 });
+          this.burst(tr.x, tr.y, '#cfcfcf', 8);
+        }
+      } else if (tr.type === 'dart') {
+        tr.cd -= dt;
+        if (tr.cd <= 0) {
+          tr.cd = 2.6;
+          // 発射方向にプレイヤーが概ね居る or 常時掃射
+          this.spawnProjectile('enemy', tr.x, tr.y, tr.dir, { speed: 460, dmg: tr.dmg, r: 6, color: '#d8c08a', life: 1.6 });
+          Audio2.play('shoot');
+        }
+      }
+    }
+  },
+
+  // ---------- ゾーン収縮（闇の侵食） ----------
+  initZone() {
+    const dgn = this.dgn;
+    const diag = Math.hypot(dgn.pxW, dgn.pxH);
+    this.zone = {
+      cx: dgn.portal.x, cy: dgn.portal.y,
+      r: diag, r0: diag, minR: 260,
+      grace: 50, shrinkDur: 80, dmg: 8 + this.floor * 4,
+      warned: false,
+    };
+  },
+  updateZone(dt) {
+    const z = this.zone, p = this.player;
+    const t = this.runTime;
+    if (t < z.grace) { z.r = z.r0; }
+    else {
+      const k = clamp((t - z.grace) / z.shrinkDur, 0, 1);
+      z.r = lerp(z.r0, z.minR, k);
+      if (!z.warned) { z.warned = true; Audio2.play('zone'); this.toast('⚠ 闇が侵食を始めた — 脱出を急げ'); }
+    }
+    // 圏外ダメージ
+    if (!p.dead && dist(p.x, p.y, z.cx, z.cy) > z.r) {
+      p.zoneTick = (p.zoneTick || 0) + dt;
+      if (p.zoneTick >= 0.5) {
+        p.zoneTick = 0;
+        this.hurtPlayer(z.dmg, true);
+        this.addFloat(p.x, p.y - 30, '闇', '#b06bff', 14);
+      }
+    } else p.zoneTick = 0;
+  },
+
   // ---------- ポーション ----------
   usePotion(slot) {
     const p = this.player;
@@ -517,6 +622,7 @@ const Game = {
     if (!it || !it.potion) return;
     if (it.potion.hp) { p.hp = Math.min(p.derived.hpmax, p.hp + it.potion.hp); this.addFloat(p.x, p.y - 22, '+' + it.potion.hp, '#7dffa0', 17); }
     if (it.potion.mp) { p.mp = Math.min(p.derived.mpmax, p.mp + it.potion.mp); this.addFloat(p.x, p.y - 22, '+' + it.potion.mp + ' MP', '#7db8ff', 17); }
+    Audio2.play('potion');
     this.burst(p.x, p.y, it.potion.mp ? '#7db8ff' : '#7dffa0', 10);
     p.potions[slot] = null;
     p.potionCd = 0.6;
@@ -545,6 +651,7 @@ const Game = {
     const xp = Math.round(this.run.kills * 6 + this.floor * 10);
     grantXP(this.profile, xp);
     saveProfile(this.profile);
+    Audio2.play('death');
     UI.showResult(false, { kills: this.run.kills, gold: 0, xp, lost, loot: this.run.loot });
   },
 
@@ -564,6 +671,8 @@ const Game = {
     this.profile.runStats.gold += this.run.gold;
     saveProfile(this.profile);
     this.burst(this.player.x, this.player.y, '#7fd0ff', 30);
+    Audio2.play('extract');
+    if (leveled) setTimeout(() => Audio2.play('levelup'), 500);
     UI.showResult(true, { kills: this.run.kills, gold: this.run.gold, xp, leveled, loot: this.run.loot });
   },
 

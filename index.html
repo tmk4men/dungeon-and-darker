@@ -22,7 +22,10 @@
         <div class="vital mp"><div class="vlabel">MP</div><div class="vbar"><div id="mpfill" class="vfill"></div><span id="mptext"></span></div></div>
         <div id="runinfo" class="runinfo"></div>
       </div>
-      <!-- 右上：退却 -->
+      <!-- 上中央：ゾーン収縮タイマー -->
+      <div id="zoneinfo" class="zoneinfo"></div>
+      <!-- 右上：ミュート＆退却 -->
+      <button id="mute" class="hud-btn">🔊</button>
       <button id="abandon" class="hud-btn">≡ 退却</button>
       <!-- 中央：脱出ゲージ -->
       <div id="extract"></div>
@@ -45,6 +48,7 @@
 
   <script src="js/config.js"></script>
   <script src="js/utils.js"></script>
+  <script src="js/audio.js"></script>
   <script src="js/data.js"></script>
   <script src="js/items.js"></script>
   <script src="js/save.js"></script>
@@ -58,6 +62,15 @@
     document.getElementById('abandon').addEventListener('click', () => {
       if (Game.state === 'dungeon' && confirm('退却しますか？（持ち込んだ装備・戦利品を失います）')) Game.abandon();
     });
+    // ミュート
+    document.getElementById('mute').addEventListener('click', (e) => {
+      const m = Audio2.toggleMute();
+      e.currentTarget.textContent = m ? '🔇' : '🔊';
+    });
+    // オーディオはユーザー操作で解放（モバイル対策）
+    const unlock = () => { Audio2.init(); Audio2.resume(); window.removeEventListener('pointerdown', unlock); window.removeEventListener('keydown', unlock); };
+    window.addEventListener('pointerdown', unlock);
+    window.addEventListener('keydown', unlock);
   </script>
 </body>
 </html>

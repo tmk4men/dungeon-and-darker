@@ -113,10 +113,11 @@ function genDungeon(floor, derived) {
   for (const r of rooms) {
     if (r === start) continue;
     // 敵
-    let count = randInt(1, 2 + Math.min(floor, 4));
+    let count = randInt(0, 1 + Math.min(floor, 3));
     if (r === portalRoom && floor >= 2) {
       // ボス部屋
-      enemySpawns.push({ type: floor >= 3 ? 'ogre' : 'lich', x: (r.ccx + 0.5) * CONFIG.TILE, y: (r.ccy + 0.5) * CONFIG.TILE });
+      const bossPool = floor >= 3 ? ['ogre', 'necromancer', 'lich'] : ['lich', 'necromancer'];
+      enemySpawns.push({ type: choice(bossPool), x: (r.ccx + 0.5) * CONFIG.TILE, y: (r.ccy + 0.5) * CONFIG.TILE });
       count = Math.max(0, count - 2);
     }
     for (let i = 0; i < count; i++) {
@@ -146,8 +147,28 @@ function genDungeon(floor, derived) {
     }
   }
 
+  // --- トラップ ---
+  const traps = [];
+  const trapCount = 3 + floor * 2;
+  for (let i = 0; i < trapCount; i++) {
+    // 床タイルをランダムに選ぶ（開始部屋以外）
+    let tx, ty, tries = 0;
+    do {
+      const r = rooms[randInt(1, rooms.length - 1)];
+      tx = r.x + randInt(1, r.w - 2); ty = r.y + randInt(1, r.h - 2);
+      tries++;
+    } while ((get(tx, ty) !== T_FLOOR) && tries < 20);
+    if (get(tx, ty) !== T_FLOOR) continue;
+    const cx = (tx + 0.5) * CONFIG.TILE, cy = (ty + 0.5) * CONFIG.TILE;
+    if (chance(0.65)) {
+      traps.push({ type: 'spike', x: cx, y: cy, tx, ty, phase: rand(0, 2.4), period: 2.4, armed: false, dmg: 10 + floor * 6 });
+    } else {
+      traps.push({ type: 'dart', x: cx, y: cy, tx, ty, dir: choice([0, Math.PI / 2, Math.PI, -Math.PI / 2]), cd: rand(0, 2.4), dmg: 8 + floor * 5 });
+    }
+  }
+
   return {
-    floor, W, H, tiles, rooms, lights, portal,
+    floor, W, H, tiles, rooms, lights, portal, traps,
     get, set,
     startX: (start.ccx + 0.5) * CONFIG.TILE,
     startY: (start.ccy + 0.5) * CONFIG.TILE,
@@ -161,10 +182,14 @@ function floorEnemyPool(floor) {
     { item: 'skeleton', weight: 10 },
     { item: 'bat', weight: 8 },
     { item: 'slime', weight: 7 },
+    { item: 'spider', weight: 6 },
     { item: 'goblin', weight: 6 + floor },
+    { item: 'imp', weight: 4 + floor },
     { item: 'skel_archer', weight: 5 + floor },
     { item: 'zombie', weight: 4 + floor },
-    { item: 'warlock', weight: 2 + floor * 1.5 },
+    { item: 'wraith', weight: 2 + floor * 1.4 },
+    { item: 'warlock', weight: 2 + floor * 1.3 },
+    { item: 'skel_knight', weight: 1 + floor * 1.6 },
   ];
   return pool;
 }

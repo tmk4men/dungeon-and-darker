@@ -67,6 +67,9 @@ const Render = {
     // --- ポータル（脱出口） ---
     this.drawPortal(ctx, game);
 
+    // --- トラップ ---
+    if (game.traps) for (const tr of game.traps) this.drawTrap(ctx, tr);
+
     // --- 地上アイテム・宝箱 ---
     for (const g of game.groundItems) this.drawGroundItem(ctx, g);
     for (const c of game.chests) this.drawChest(ctx, c);
@@ -96,7 +99,60 @@ const Render = {
     // --- ライティング ---
     this.drawLighting(game);
 
-    // --- 部屋に入った時の通知 ---
+    // --- ゾーン収縮（闇の侵食）を最前面に ---
+    if (game.zone) this.drawZone(game);
+  },
+
+  drawTrap(ctx, tr) {
+    const s = this.worldToScreen(tr.x, tr.y), T = CONFIG.TILE;
+    if (tr.type === 'spike') {
+      // 床のプレート
+      ctx.fillStyle = 'rgba(40,40,52,0.6)';
+      ctx.fillRect(s.x - T * 0.4, s.y - T * 0.4, T * 0.8, T * 0.8);
+      const warn = tr.phase < 0.4;
+      const telegraph = tr.phase > tr.period - 0.45;
+      if (warn) {
+        ctx.fillStyle = '#cdd2d8';
+        for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
+          ctx.beginPath();
+          ctx.moveTo(s.x + i * 12 - 4, s.y + j * 12 + 6);
+          ctx.lineTo(s.x + i * 12, s.y + j * 12 - 8);
+          ctx.lineTo(s.x + i * 12 + 4, s.y + j * 12 + 6);
+          ctx.closePath(); ctx.fill();
+        }
+      } else {
+        ctx.fillStyle = telegraph ? 'rgba(255,80,60,0.5)' : 'rgba(120,40,40,0.35)';
+        ctx.fillRect(s.x - T * 0.3, s.y - T * 0.3, T * 0.6, T * 0.6);
+        // 穴
+        ctx.fillStyle = '#15151c';
+        for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) { ctx.beginPath(); ctx.arc(s.x + i * 12, s.y + j * 12, 2.2, 0, TAU); ctx.fill(); }
+      }
+    } else {
+      // ダートトラップ（壁の発射口）
+      ctx.fillStyle = 'rgba(60,50,40,0.7)';
+      ctx.beginPath(); ctx.arc(s.x, s.y, 9, 0, TAU); ctx.fill();
+      ctx.fillStyle = '#0c0c12';
+      ctx.beginPath(); ctx.arc(s.x + Math.cos(tr.dir) * 3, s.y + Math.sin(tr.dir) * 3, 4, 0, TAU); ctx.fill();
+    }
+  },
+
+  drawZone(game) {
+    const z = game.zone;
+    const s = this.worldToScreen(z.cx, z.cy);
+    const ctx = this.ctx;
+    ctx.save();
+    // 画面全体から安全円を除いた領域を闇で塗る
+    ctx.beginPath();
+    ctx.rect(0, 0, CONFIG.VIEW_W, CONFIG.VIEW_H);
+    ctx.arc(s.x, s.y, z.r, 0, TAU, true); // 逆回りで穴
+    const pulse = 0.5 + Math.sin(game.time * 4) * 0.08;
+    ctx.fillStyle = `rgba(60,12,90,${0.42 * pulse + 0.18})`;
+    ctx.fill('evenodd');
+    // 境界のリング
+    ctx.beginPath(); ctx.arc(s.x, s.y, z.r, 0, TAU);
+    ctx.strokeStyle = `rgba(180,90,255,${0.6 * pulse + 0.3})`;
+    ctx.lineWidth = 5; ctx.stroke();
+    ctx.restore();
   },
 
   drawWall(ctx, dgn, tx, ty) {

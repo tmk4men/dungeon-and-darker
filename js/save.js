@@ -17,12 +17,12 @@ function newProfile(classId) {
     runStats: { runs: 0, extracts: 0, deaths: 0, kills: 0, gold: 0 },
   };
   // 初期装備：職業の標準武器＋トーチ＋ポーション
-  const wmap = { sword: 'w_sword', hammer: 'w_hammer', dagger: 'w_dagger', mace: 'w_mace', bow: 'w_bow', staff: 'w_staff' };
+  const wmap = { sword: 'w_sword', hammer: 'w_hammer', dagger: 'w_dagger', mace: 'w_mace', bow: 'w_bow', staff: 'w_staff', spear: 'w_spear', tome: 'w_tome', flail: 'w_flail' };
   p.equipment.weapon = createItem(wmap[cls.weapon], 'common');
   p.equipment.torch = createItem('t_torch', 'common');
-  p.equipment.chest = createItem(cls.weapon === 'staff' ? 'a_robe' : 'a_tunic', 'common');
+  p.equipment.chest = createItem(['staff', 'tome'].includes(cls.weapon) ? 'a_robe' : 'a_tunic', 'common');
   p.potions[0] = createItem('p_hp', 'common');
-  if (['mage', 'cleric'].includes(classId)) p.potions[1] = createItem('p_mp', 'common');
+  if (['mage', 'cleric', 'warlock'].includes(classId)) p.potions[1] = createItem('p_mp', 'common');
   p.stash.push(createItem('p_hp', 'common'));
   return p;
 }
