@@ -69,9 +69,9 @@
   <script src="js/ui.js"></script>
   <script src="js/game.js"></script>
   <script>
-    // 退却ボタン
+    // 退却ボタン（ゲーム内モーダル）
     document.getElementById('abandon').addEventListener('click', () => {
-      if (Game.state === 'dungeon' && confirm('退却しますか？（持ち込んだ装備・戦利品を失います）')) Game.abandon();
+      if (Game.state === 'dungeon') UI.confirm('退いて伽藍へ還りますか？\n持ち込んだ装備と道中の戦利品は全て失われます。', () => Game.abandon(), '退く', 'やめる');
     });
     // 祭壇インタラクト
     document.getElementById('interactbtn').addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); Game.interact(); });

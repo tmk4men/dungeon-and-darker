@@ -65,6 +65,9 @@ const Render = {
     this.cam.y = clamp(ty, 0, Math.max(0, dgn.pxH - CONFIG.VIEW_H));
   },
 
+  // 安定した擬似乱数（タイル装飾用）
+  hash(x, y) { let h = (x * 374761393 + y * 668265263) | 0; h = (h ^ (h >> 13)) * 1274126177 | 0; return ((h ^ (h >> 16)) >>> 0) / 4294967296; },
+
   // ---- メイン描画 ----
   render(game) {
     const ctx = this.ctx, dgn = game.dgn, T = CONFIG.TILE;
@@ -92,8 +95,20 @@ const Render = {
         const even = (tx + ty) & 1;
         ctx.fillStyle = even ? this.theme.floorA : this.theme.floorB;
         ctx.fillRect(s.x, s.y, T + 1, T + 1);
+        // 石畳の質感（タイルごとに安定した装飾）
+        const hh = this.hash(tx, ty);
+        ctx.fillStyle = hh > 0.5 ? 'rgba(255,238,206,0.05)' : 'rgba(0,0,0,0.12)';
+        ctx.fillRect(s.x + 3 + hh * (T - 9), s.y + 3 + ((hh * 31) % 1) * (T - 9), 3, 3);
+        if (hh > 0.86) {
+          ctx.fillStyle = 'rgba(0,0,0,0.10)';
+          ctx.fillRect(s.x + 5 + ((hh * 57) % 1) * (T - 10), s.y + 6 + ((hh * 17) % 1) * (T - 12), 2, 2);
+        }
+        if (hh > 0.94) { // 罅
+          ctx.strokeStyle = 'rgba(0,0,0,0.22)'; ctx.lineWidth = 1;
+          ctx.beginPath(); ctx.moveTo(s.x + T * 0.26, s.y + T * 0.28); ctx.lineTo(s.x + T * 0.5, s.y + T * 0.52); ctx.lineTo(s.x + T * 0.42, s.y + T * 0.78); ctx.stroke();
+        }
         // 目地
-        ctx.fillStyle = 'rgba(0,0,0,0.18)';
+        ctx.fillStyle = 'rgba(0,0,0,0.2)';
         ctx.fillRect(s.x, s.y, T + 1, 1.5);
         ctx.fillRect(s.x, s.y, 1.5, T + 1);
         if (t === T_DOOR || t === T_DOOROPEN) this.drawDoorFloor(ctx, s, t);
@@ -244,6 +259,10 @@ const Render = {
     ctx.fillStyle = 'rgba(0,0,0,0.22)';
     ctx.fillRect(s.x, topY, T + 1, 2);
     ctx.fillRect(s.x, topY, 2, T + 1);
+    // 苔・罅（安定装飾）
+    const hw = this.hash(tx * 7 + 3, ty * 7 + 5);
+    if (hw > 0.82) { ctx.fillStyle = 'rgba(86,112,72,0.2)'; ctx.fillRect(s.x + 4 + hw * (T - 12), topY + 4 + ((hw * 19) % 1) * (T - 12), 5, 4); }
+    else if (hw < 0.16) { ctx.strokeStyle = 'rgba(0,0,0,0.28)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(s.x + T * 0.3, topY + 3); ctx.lineTo(s.x + T * 0.38, topY + T * 0.6); ctx.stroke(); }
   },
 
   drawDoorFloor(ctx, s, t) {
@@ -488,41 +507,50 @@ const Render = {
     ctx.restore();
   },
 
+  // ミニマップ：全体は最初から描かれている（踏破で明るくなる）
   drawMinimap(game) {
     const dgn = game.dgn, ctx = this.ctx, T = CONFIG.TILE;
-    const pad = 12, mw = 148, mh = Math.round(mw * dgn.pxH / dgn.pxW);
-    const x0 = CONFIG.VIEW_W - mw - pad, y0 = 56;
+    const pad = 12, mw = 160, mh = Math.round(mw * dgn.pxH / dgn.pxW);
+    const x0 = CONFIG.VIEW_W - mw - pad, y0 = 58;
     const sx = mw / dgn.pxW, sy = mh / dgn.pxH;
+    const X = (wx) => x0 + wx * sx, Y = (wy) => y0 + wy * sy;
     ctx.save();
-    ctx.fillStyle = 'rgba(8,8,14,0.72)'; ctx.fillRect(x0 - 4, y0 - 4, mw + 8, mh + 8);
-    ctx.strokeStyle = 'rgba(255,206,107,0.4)'; ctx.lineWidth = 1; ctx.strokeRect(x0 - 4, y0 - 4, mw + 8, mh + 8);
+    // 巻物風の地（金二重枠＋四隅）
+    ctx.fillStyle = 'rgba(10,9,14,0.82)'; ctx.fillRect(x0 - 6, y0 - 6, mw + 12, mh + 12);
+    ctx.strokeStyle = 'rgba(199,162,76,0.5)'; ctx.lineWidth = 1.5; ctx.strokeRect(x0 - 6, y0 - 6, mw + 12, mh + 12);
+    ctx.strokeStyle = 'rgba(199,162,76,0.22)'; ctx.lineWidth = 1; ctx.strokeRect(x0 - 3, y0 - 3, mw + 6, mh + 6);
+    ctx.fillStyle = 'rgba(199,162,76,0.8)';
+    for (const [cx, cy] of [[x0 - 6, y0 - 6], [x0 + mw + 6, y0 - 6], [x0 - 6, y0 + mh + 6], [x0 + mw + 6, y0 + mh + 6]]) ctx.fillRect(cx - 1.5, cy - 1.5, 3, 3);
+    // 部屋（全表示・踏破で明るく）
     for (const r of dgn.rooms) {
-      if (!r.revealed) continue;
-      ctx.fillStyle = 'rgba(120,120,142,0.55)';
-      ctx.fillRect(x0 + r.x * T * sx, y0 + r.y * T * sy, r.w * T * sx, r.h * T * sy);
+      ctx.fillStyle = r.revealed ? 'rgba(150,140,120,0.62)' : 'rgba(80,76,92,0.32)';
+      ctx.fillRect(X(r.x * T), Y(r.y * T), r.w * T * sx, r.h * T * sy);
+      if (r === game.playerRoom) { ctx.strokeStyle = 'rgba(236,205,126,0.9)'; ctx.lineWidth = 1; ctx.strokeRect(X(r.x * T), Y(r.y * T), r.w * T * sx, r.h * T * sy); }
     }
+    // 脱出ポータル
     for (const p of dgn.portals) {
       const open = game.runTime >= p.openAt;
-      ctx.fillStyle = p.bonus ? (open ? '#ffce6b' : 'rgba(255,206,107,0.4)') : (open ? '#7fd0ff' : 'rgba(127,208,255,0.4)');
-      ctx.beginPath(); ctx.arc(x0 + p.x * sx, y0 + p.y * sy, 3, 0, TAU); ctx.fill();
+      ctx.fillStyle = p.bonus ? (open ? '#ffce6b' : 'rgba(255,206,107,0.45)') : (open ? '#7fd0ff' : 'rgba(127,208,255,0.45)');
+      ctx.beginPath(); ctx.arc(X(p.x), Y(p.y), 3.2, 0, TAU); ctx.fill();
+      ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.lineWidth = 0.5; ctx.stroke();
     }
-    for (const a of (game.altars || [])) {
-      if (a.used) continue;
-      ctx.fillStyle = a.type === 'sacrifice' ? '#c43b5e' : '#7fb0ff';
-      ctx.beginPath(); ctx.arc(x0 + a.x * sx, y0 + a.y * sy, 2, 0, TAU); ctx.fill();
-    }
-    if (game.stairs) {
-      ctx.fillStyle = '#bfe0ff';
-      ctx.fillRect(x0 + game.stairs.x * sx - 2.5, y0 + game.stairs.y * sy - 2.5, 5, 5);
-    }
-    // ライバル
+    // 下り階段
+    if (game.stairs) { ctx.fillStyle = '#bfe0ff'; ctx.fillRect(X(game.stairs.x) - 2.5, Y(game.stairs.y) - 2.5, 5, 5); ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.lineWidth = 0.5; ctx.strokeRect(X(game.stairs.x) - 2.5, Y(game.stairs.y) - 2.5, 5, 5); }
+    // 祭壇/聖域
+    for (const a of (game.altars || [])) { if (a.used) continue; ctx.fillStyle = a.type === 'sacrifice' ? '#c8402f' : '#7fb0ff'; ctx.beginPath(); ctx.arc(X(a.x), Y(a.y), 2, 0, TAU); ctx.fill(); }
+    // ライバル（踏破部屋のみ）
     for (const e of game.enemies) {
       if (e.dead || e.type !== 'rival') continue;
-      if (!roomAt(dgn, e.x, e.y) || !roomAt(dgn, e.x, e.y).revealed) continue;
-      ctx.fillStyle = '#ff7ad0'; ctx.beginPath(); ctx.arc(x0 + e.x * sx, y0 + e.y * sy, 2.5, 0, TAU); ctx.fill();
+      const rm = roomAt(dgn, e.x, e.y); if (!rm || !rm.revealed) continue;
+      ctx.fillStyle = '#ff7ad0'; ctx.beginPath(); ctx.arc(X(e.x), Y(e.y), 2.4, 0, TAU); ctx.fill();
     }
-    const pl = game.player;
-    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(x0 + pl.x * sx, y0 + pl.y * sy, 2.6, 0, TAU); ctx.fill();
+    // 自機（明滅）
+    const pl = game.player, blink = 0.6 + Math.sin(game.time * 6) * 0.4;
+    ctx.fillStyle = '#fff'; ctx.globalAlpha = blink;
+    ctx.beginPath(); ctx.arc(X(pl.x), Y(pl.y), 2.8, 0, TAU); ctx.fill(); ctx.globalAlpha = 1;
+    // 現在地の realm 名
+    ctx.fillStyle = 'rgba(236,205,126,0.85)'; ctx.font = 'bold 9px "Shippori Mincho B1", serif'; ctx.textAlign = 'left';
+    ctx.fillText(realmName(game.floor), x0 - 4, y0 - 9);
     ctx.restore();
   },
 
@@ -577,15 +605,16 @@ const Render = {
     lctx.setTransform(1, 0, 0, 1, 0, 0);
     lctx.clearRect(0, 0, CONFIG.VIEW_W, CONFIG.VIEW_H);
 
-    // ベースの闇（マップは最初から見える＝薄め。雰囲気のための陰影のみ）
+    // ベースの闇（暖かみのある漆黒）。世界は暗く、視界とトーチで照らす。
     lctx.globalCompositeOperation = 'source-over';
-    lctx.fillStyle = 'rgba(7,4,3,0.5)';
+    lctx.fillStyle = 'rgba(7,4,3,0.95)';
     lctx.fillRect(0, 0, CONFIG.VIEW_W, CONFIG.VIEW_H);
 
-    // 全ての部屋を可視化（現在地が最も明るい）
+    // 踏破済みの「明るい部屋」は記憶として薄く見える
     lctx.globalCompositeOperation = 'destination-out';
     for (const r of dgn.rooms) {
-      this.carveRoom(lctx, r, r === game.playerRoom ? 0.96 : (r.lit ? 0.82 : 0.66));
+      if (!r.revealed || !r.lit) continue;
+      this.carveRoom(lctx, r, r === game.playerRoom ? 0.95 : 0.58);
     }
 
     // 固定光源

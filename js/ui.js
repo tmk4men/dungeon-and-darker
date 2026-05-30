@@ -44,6 +44,22 @@ const UI = {
   },
 
   hideAll() { this.root.innerHTML = ''; this.root.style.display = 'none'; this.hud.style.display = 'none'; },
+
+  // ゲーム内モーダル確認（ブラウザの confirm を使わない）
+  confirm(message, onYes, yesLabel = 'はい', noLabel = 'やめる') {
+    const app = document.getElementById('app');
+    let m = document.getElementById('modal');
+    if (!m) { m = document.createElement('div'); m.id = 'modal'; if (app && app.appendChild) app.appendChild(m); }
+    m.innerHTML = `<div class="modal-box"><div class="modal-msg">${message}</div><div class="modal-btns"><button class="btn modal-no">${noLabel}</button><button class="btn modal-yes">${yesLabel}</button></div></div>`;
+    m.style.display = 'flex';
+    const yes = m.querySelector ? m.querySelector('.modal-yes') : null;
+    const no = m.querySelector ? m.querySelector('.modal-no') : null;
+    const close = () => { m.style.display = 'none'; m.innerHTML = ''; };
+    if (yes && no) {
+      yes.addEventListener('click', () => { Audio2.play && Audio2.play('ui'); close(); onYes && onYes(); });
+      no.addEventListener('click', () => { Audio2.play && Audio2.play('ui'); close(); });
+    } else { close(); onYes && onYes(); }
+  },
   panel(html) { this.root.style.display = 'flex'; this.root.innerHTML = html; },
 
   rarityTag(it) {
@@ -316,6 +332,7 @@ const UI = {
         <h3>出撃</h3>
         <button class="btn big enterdungeon">ダンジョンへ潜入</button>
         <p class="muted" style="margin-top:10px">ひとつながりのダンジョンです。各階にある<b>「下り階段」</b>で深く潜るほど、敵が強くなり戦利品のレア度とゴールドが増えます。脱出ポータルからはいつでも帰還でき、深く潜ってから帰るほど高リスク高報酬です。</p>
+        <p class="muted" style="margin-top:8px">操作：左スティック＝移動（<b>二度押しで回避</b>）／右スティック＝攻撃・狙う／扉・宝箱は近づくと開く。</p>
       </div></div>
     </div>`;
   },

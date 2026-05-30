@@ -77,9 +77,6 @@ const CLASS_SKILL_POOL = {
   rogue:     ['dash_strike', 'poison_dart', 'fan_knives', 'smoke'],
   cleric:    ['heal', 'smite', 'bless', 'holy_nova'],
   mage:      ['firebolt', 'frost_nova', 'arcane_orb', 'blink'],
-  paladin:   ['shield_bash', 'smite', 'heal', 'holy_nova'],
-  warlock:   ['life_drain', 'curse_nova', 'shadow_bolt', 'bless'],
-  lancer:    ['charge', 'impale', 'sweep', 'leap'],
 };
 
 // --- 職業 ---
@@ -114,22 +111,9 @@ const CLASSES = {
     base: { STR: 7, VIG: 8, AGI: 9, DEX: 8, WILL: 18, WIS: 12, LUCK: 9 },
     skills: ['firebolt', 'frost_nova'],
   },
-  paladin: {
-    name: '仁王', color: '#f0e2a8', weapon: 'flail', blurb: '寺門を守る金剛力士。打撃で魔を鎮め聖光をまとう。',
-    base: { STR: 14, VIG: 15, AGI: 7, DEX: 8, WILL: 9, WIS: 12, LUCK: 7 },
-    skills: ['shield_bash', 'smite'],
-  },
-  warlock: {
-    name: '怨術師', color: '#a05bd6', weapon: 'tome', blurb: '禁断の呪詛を能くする外法者。吸命と呪いで蝕む。',
-    base: { STR: 8, VIG: 11, AGI: 9, DEX: 8, WILL: 16, WIS: 11, LUCK: 9 },
-    skills: ['life_drain', 'curse_nova'],
-  },
-  lancer: {
-    name: '韋駄天', color: '#5ab0a0', weapon: 'spear', blurb: '俊足の護法神。槍の間合いと突進で魔を薙ぐ。',
-    base: { STR: 13, VIG: 12, AGI: 13, DEX: 13, WILL: 7, WIS: 7, LUCK: 9 },
-    skills: ['charge', 'impale'],
-  },
 };
+// 廃止した職業の救済（旧セーブ → 似た職へ）
+const REMOVED_CLASS_MAP = { paladin: 'fighter', warlock: 'mage', lancer: 'rogue' };
 
 // --- アイテムベース ---
 // slot: weapon/head/chest/hands/legs/ring/torch/potion/treasure

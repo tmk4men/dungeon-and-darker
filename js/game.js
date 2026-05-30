@@ -34,7 +34,14 @@ const Game = {
   chooseClass(classId) {
     if (this.profile && this.profile.classId === classId) { this.goTown('status'); return; }
     if (this.profile) {
-      if (!confirm('修行の道を改めますか？\nレベル・ステータス・装備は新たな道のものに改まります（所持金と倉庫は引き継ぎ）。')) return;
+      UI.confirm('修行の道を改めますか？\nレベル・ステータス・装備は新たな道のものに改まります（所持金と倉庫は引き継ぎ）。',
+        () => this.applyClass(classId), '改める', 'やめる');
+      return;
+    }
+    this.applyClass(classId);
+  },
+  applyClass(classId) {
+    if (this.profile) {
       const gold = this.profile.gold, stash = this.profile.stash, bounties = this.profile.bounties, ach = this.profile.achievements;
       this.profile = newProfile(classId);
       this.profile.gold = gold; this.profile.stash = stash; this.profile.bounties = bounties; this.profile.achievements = ach;
@@ -53,6 +60,10 @@ const Game = {
     Input.enabled = false; Input.reset();
     if (this.profile) {
       // 旧セーブの移行
+      if (!CLASSES[this.profile.classId]) {
+        this.profile.classId = REMOVED_CLASS_MAP[this.profile.classId] || 'fighter';
+        this.profile.loadout = [...CLASSES[this.profile.classId].skills];
+      }
       if (!this.profile.achievements) this.profile.achievements = {};
       if (!this.profile.bounties) this.profile.bounties = [];
       if (!this.profile.runStats.elites) this.profile.runStats.elites = 0;
@@ -239,6 +250,17 @@ const Game = {
     // 投射物
     this.updateProjectiles(dt);
 
+    // 環境演出：火の粉・塵が漂う
+    if (Math.random() < dt * 5) {
+      const a = rand(0, TAU), dd = rand(50, 300);
+      const warm = chance(0.35);
+      this.particles.push({
+        x: p.x + Math.cos(a) * dd, y: p.y + Math.sin(a) * dd,
+        vx: rand(-5, 5), vy: rand(-16, -5), r: rand(0.8, 1.7),
+        color: warm ? 'rgba(255,176,92,0.5)' : 'rgba(200,205,225,0.22)',
+        life: rand(1.4, 2.6), maxlife: 2.6,
+      });
+    }
     // パーティクル・フロートテキスト
     for (const pa of this.particles) { pa.x += pa.vx * dt; pa.y += pa.vy * dt; pa.vx *= 0.92; pa.vy *= 0.92; pa.life -= dt; }
     this.particles = this.particles.filter(pa => pa.life > 0);

@@ -140,8 +140,8 @@ const Input = {
       ctx.beginPath(); ctx.arc(s.ox + s.dx, s.oy + s.dy, this.R * 0.42, 0, TAU); ctx.fill();
       ctx.restore();
     };
-    if (this.left.id === null) drawBase(home.left.x, home.left.y, '#7fbfff', '移動・二度押で回避'); else drawStick(this.left, '#7fbfff');
-    if (this.right.id === null) drawBase(home.right.x, home.right.y, '#ff9f6b', '攻撃・狙う'); else drawStick(this.right, '#ff9f6b');
+    if (this.left.id === null) drawBase(home.left.x, home.left.y, '#7fbfff', '移動'); else drawStick(this.left, '#7fbfff');
+    if (this.right.id === null) drawBase(home.right.x, home.right.y, '#ff9f6b', '攻撃'); else drawStick(this.right, '#ff9f6b');
     // 右スティック：照準ライン
     if (this.right.id !== null && this.aimVec.len > 0.12) {
       ctx.save(); ctx.globalAlpha = 0.6;

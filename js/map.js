@@ -47,7 +47,7 @@ function genDungeon(floor, derived) {
         id: rooms.length, cx, cy,
         x: rx, y: ry, w: rw, h: rh,
         ccx: rx + (rw >> 1), ccy: ry + (rh >> 1),
-        revealed: true, lit, ambient: lit ? 0.5 : 0.92, lights: [],
+        revealed: false, lit, ambient: lit ? 0.5 : 0.92, lights: [],
       };
       grid[cy * cols + cx] = room;
       rooms.push(room);
