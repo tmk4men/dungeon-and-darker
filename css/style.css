@@ -210,6 +210,12 @@ button { font-family: inherit; cursor: pointer; color: var(--ink); }
 .attr-val { font-family: var(--f-head); font-size: 21px; font-weight: 700; width: 34px; text-align: center; color: var(--ink); }
 .drow { display: flex; justify-content: space-between; padding: 5px 0; font-size: 12.5px; border-bottom: 1px solid rgba(90,74,40,.18); }
 .drow b { color: var(--gold-bright); font-family: var(--f-head); }
+/* 戦型と装束（ビルド深度） */
+.syn-head { margin-top: 11px; font-family: var(--f-head); font-size: 11px; letter-spacing: 1px; color: var(--gold); text-transform: uppercase; }
+.syn-list { margin-top: 5px; display: flex; flex-direction: column; gap: 5px; }
+.syn { display: flex; gap: 9px; align-items: baseline; font-size: 11.5px; line-height: 1.4; }
+.syn b { color: var(--ember); font-family: var(--f-flavor); flex-shrink: 0; min-width: 34px; }
+.syn span { color: var(--muted); }
 
 /* equipment / inventory */
 .eq-slot { display: flex; align-items: center; gap: 10px; padding: 9px; background: rgba(12,9,5,.5); border: 1px solid var(--line); border-radius: 3px; margin-bottom: 6px; }

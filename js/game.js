@@ -163,7 +163,7 @@ const Game = {
 
   makeEnemy(type, x, y, forceElite) {
     const def = ENEMIES[type];
-    const sc = 1 + (this.floor - 1) * 0.16 + (this.profile.rebirths || 0) * REBIRTH.enemyScale;
+    const sc = 1 + (this.floor - 1) * 0.20 + (this.profile.rebirths || 0) * REBIRTH.enemyScale;
     const e = {
       type, x, y, vx: 0, vy: 0, facing: rand(0, TAU),
       maxhp: Math.round(def.hp * sc), hp: Math.round(def.hp * sc),
@@ -182,7 +182,7 @@ const Game = {
       e.color = cls.color;
     }
     // エリート抽選（ボス・ライバル以外）
-    if (!def.boss && !def.rival && (forceElite || Math.random() < 0.1 + this.floor * 0.025)) {
+    if (!def.boss && !def.rival && (forceElite || Math.random() < 0.12 + this.floor * 0.03)) {
       const mod = choice(ELITE_MODS);
       e.elite = mod;
       e.maxhp = Math.round(e.maxhp * mod.hp); e.hp = e.maxhp;
@@ -344,15 +344,16 @@ const Game = {
     if (p.attackCd > 0) return;
     p.attackCd = wt.speed * d.atkSpeedMult;
     p.attackT = 0.18;
+    const wkey = (d.weaponItem && d.weaponItem.wtype) || CLASSES[p.classId].weapon; // 武器の型
     const power = attackPower(d, wt.scaling) * this.buffMul(wt.kind === 'magic' ? 'matk' : 'patk');
     if (wt.kind === 'melee') {
-      this.meleeSwing(p.x, p.y, ang, wt.range, wt.arc, power, { crit: d.crit, critDmg: d.critDmg, knock: wt.knock || 0, color: wt.color });
+      this.meleeSwing(p.x, p.y, ang, wt.range, wt.arc, power, { crit: d.crit, critDmg: d.critDmg, knock: wt.knock || 0, color: wt.color, weaponKind: wkey });
       Audio2.play('swing');
     } else {
       // ranged/magic：投射
       this.spawnProjectile('player', p.x, p.y, ang, {
         speed: wt.projSpeed, dmg: power, r: wt.kind === 'magic' ? 9 : 7,
-        color: wt.color, crit: d.crit, critDmg: d.critDmg, life: 1.2,
+        color: wt.color, crit: d.crit, critDmg: d.critDmg, life: 1.2, weaponKind: wkey,
       });
       Audio2.play(wt.kind === 'magic' ? 'magic' : 'shoot');
     }
@@ -434,7 +435,7 @@ const Game = {
       r: o.r || 8, color: o.color || '#fff', dmg: o.dmg || 5,
       pierce: o.pierce || 0, hits: new Set(), explode: o.explode || 0,
       dot: o.dot, slow: o.slow, holy: o.holy, knock: o.knock || 0,
-      lifesteal: o.lifesteal, stun: o.stun, onHit: o.onHit,
+      lifesteal: o.lifesteal, stun: o.stun, onHit: o.onHit, weaponKind: o.weaponKind,
       crit: o.crit || 0, critDmg: o.critDmg || 1.5, life: o.life || 1.5, maxlife: o.life || 1.5,
     });
   },
@@ -478,13 +479,36 @@ const Game = {
   hitEnemy(e, power, ang, opt) {
     let dmg = power;
     const def = ENEMIES[e.type];
+    const wk = opt.weaponKind; // 通常攻撃のみ武器の型が乗る
+    let defUsed = e.def, critDmgMul = 1, critChance = opt.crit || 0;
     if (opt.holy && def.undead) dmg *= 1.6;
+    // 武器の型
+    if (wk === 'dagger') {
+      if (Math.abs(angDiff(e.facing, ang)) < 1.2) { dmg *= 1.6; this.addFloat(e.x, e.y - e.r - 18, '背刺し', '#ffd24a', 13); }
+    } else if (wk === 'hammer' || wk === 'mace' || wk === 'flail') {
+      defUsed = e.def * 0.6;
+      if (!def.boss && chance(0.14)) e.stunT = Math.max(e.stunT, 0.7);
+    } else if (wk === 'sword') { critDmgMul = 1.12; }
+    else if (wk === 'bow') { if (dist(this.player.x, this.player.y, e.x, e.y) > 320) critChance += 0.25; }
+    // 状態シナジー（全攻撃に適用）
+    if (e.slowT > 0) dmg *= 1.30;  // 砕き
+    if (e.stunT > 0) dmg *= 1.20;  // 急所
     let crit = false;
-    if (opt.crit && Math.random() < opt.crit) { crit = true; dmg *= (opt.critDmg || 1.5); }
-    dmg = mitigate(dmg, e.def);
+    if (opt.crit && Math.random() < critChance) { crit = true; dmg *= (opt.critDmg || 1.5) * critDmgMul; }
+    dmg = mitigate(dmg, defUsed);
     dmg = Math.max(1, Math.round(dmg));
     e.hp -= dmg;
     e.hitFlash = 0.12;
+    // 賢者の理：魔法武器は命中でMP回復
+    if ((wk === 'staff' || wk === 'tome') && this.player.mp < this.player.derived.mpmax) this.player.mp = Math.min(this.player.derived.mpmax, this.player.mp + 3);
+    // 誘爆：継続ダメージ中の敵に会心 → 残りを爆発で即時消費（周囲も巻き込む）
+    if (crit && e.dotT > 0) {
+      const burst = Math.max(2, Math.round(e.dotDmg * 3));
+      e.hp -= burst; e.dotT = 0;
+      this.burst(e.x, e.y, '#ff7a3c', 12); this.spawnRing(e.x, e.y, 4, e.r + 14, '#ff7a3c', 0.3, 4);
+      this.addFloat(e.x, e.y - e.r - 16, '誘爆 ' + burst, '#ff7a3c', 16);
+      for (const o of this.enemies) { if (o === e || o.dead) continue; if (dist(e.x, e.y, o.x, o.y) < 72) { o.hp -= Math.round(burst * 0.5); o.hitFlash = 0.1; if (o.hp <= 0) this.killEnemy(o); } }
+    }
     if (opt.dot) { e.dotT = opt.dot.dur; e.dotDmg = opt.dot.dmg; }
     if (opt.slow) { e.slowT = opt.slow.dur; e.slowMul = opt.slow.mult; }
     if (opt.knock) { e.knockX += Math.cos(ang) * opt.knock; e.knockY += Math.sin(ang) * opt.knock; }

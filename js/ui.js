@@ -202,6 +202,20 @@ const UI = {
       ['視界', d.hasTorch ? '広い' : '狭い'],
     ].map(r => `<div class="drow"><span>${r[0]}</span><b>${r[1]}</b></div>`).join('');
     const eqNames = Object.values(p.equipment).filter(Boolean).map(it => this.rarityTag(it)).join('、') || '—';
+    // 戦型（武器の型）と装束（防具セット）
+    const wkey = p.equipment.weapon ? p.equipment.weapon.wtype : CLASSES[p.classId].weapon;
+    const trait = WEAPON_TRAITS[wkey];
+    const sb = setBonusStats(p.equipment);
+    const setHtml = sb.active.length
+      ? sb.active.map(a => `<div class="drow"><span style="color:var(--gold-bright)">${a.name}</span><b>${a.tier >= 3 ? '三' : '二'}揃え（${a.count}/3）</b></div>`).join('')
+      : '<div class="muted">装束セット効果なし（同じ装束を2点以上で発動）</div>';
+    const synHtml = SYNERGIES.map(s => `<div class="syn"><b>${s.name}</b><span>${s.desc}</span></div>`).join('');
+    const buildCard = `<div class="card"><h3>戦型と装束</h3>
+        <div class="drow"><span>得物の型</span><b>${trait ? trait.name : '—'}</b></div>
+        ${trait ? `<div class="muted" style="margin:1px 0 9px">${trait.desc}</div>` : ''}
+        ${setHtml}
+        <div class="syn-head">状態シナジー</div><div class="syn-list">${synHtml}</div>
+      </div>`;
     return `<div class="cols">
       <div class="col">
         <div class="card char-card">
@@ -222,6 +236,7 @@ const UI = {
       </div>
       <div class="col">
         <div class="card"><h3>派生ステータス</h3><div class="drow-grid">${derivedRows}</div></div>
+        ${buildCard}
         <div class="card"><h3>実績（${Object.keys(p.achievements || {}).length}/${Object.keys(ACHIEVEMENTS).length}）</h3>
           <div class="ach-chips">${Object.keys(ACHIEVEMENTS).map(id => { const a = ACHIEVEMENTS[id]; const got = p.achievements && p.achievements[id]; return `<span class="ach-chip ${got ? 'got' : ''}" title="${a.desc}">${got ? '◆' : '◇'} ${a.name}</span>`; }).join('')}</div>
         </div>

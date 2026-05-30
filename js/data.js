@@ -132,6 +132,46 @@ const VIRTUES = {
 const VIRTUE_ORDER = ['vitality', 'endure', 'restraint', 'fortune', 'swift', 'scholar'];
 function virtueLv(p, id) { return (p && p.virtues && p.virtues[id]) || 0; }
 
+// --- ビルド深度：武器の型（通常攻撃に固有の挙動）・防具セット・状態シナジー ---
+const WEAPON_TRAITS = {
+  sword:  { name: '練達', desc: '会心ダメージ +12%' },
+  dagger: { name: '背刺し', desc: '背後からの一撃 ×1.6' },
+  hammer: { name: '鎧砕き', desc: '防御を貫通(-40%)＋稀に怯ませる' },
+  mace:   { name: '鎧砕き', desc: '防御を貫通(-40%)＋稀に怯ませる' },
+  flail:  { name: '鎧砕き', desc: '防御を貫通(-40%)＋稀に怯ませる' },
+  spear:  { name: '貫き', desc: '射程が長く範囲を薙ぐ' },
+  bow:    { name: '遠射', desc: '遠距離(320超)で会心率+25%' },
+  staff:  { name: '賢者の理', desc: '命中ごとにMP+3' },
+  tome:   { name: '賢者の理', desc: '命中ごとにMP+3' },
+};
+// 状態シナジー（説明用・実処理は game.js hitEnemy）
+const SYNERGIES = [
+  { name: '砕き', desc: '鈍足・凍結中の敵への与ダメ +30%' },
+  { name: '急所', desc: '気絶中の敵への与ダメ +20%' },
+  { name: '誘爆', desc: '継続ダメージ中の敵に会心 → 残りを爆発で即時消費' },
+];
+// 防具セット（同じ装束を複数装備でボーナス）
+const ARMOR_SETS = {
+  gou:    { name: '剛の具足',   pieces: ['a_helm', 'a_plate', 'a_gloves'], b2: { defense: 5 }, b3: { hpmax: 30, STR: 2 } },
+  hou:    { name: '法衣一式',   pieces: ['a_hood', 'a_robe', 'r_amulet'],  b2: { mpmax: 15 }, b3: { matk: 5, WILL: 2 } },
+  idaten: { name: '韋駄天装束', pieces: ['a_tunic', 'a_greaves', 'r_ring'], b2: { AGI: 3 }, b3: { crit: 0.08, AGI: 2 } },
+};
+// 装備中のセット効果を集計（stats=加算ステータス, active=発動中セット）
+function setBonusStats(equipment) {
+  const counts = {};
+  for (const slot in equipment) {
+    const it = equipment[slot]; if (!it) continue;
+    for (const sid in ARMOR_SETS) if (ARMOR_SETS[sid].pieces.includes(it.baseId)) counts[sid] = (counts[sid] || 0) + 1;
+  }
+  const stats = {}, active = [];
+  const add = s => { for (const k in s) stats[k] = (stats[k] || 0) + s[k]; };
+  for (const sid in ARMOR_SETS) {
+    const c = counts[sid] || 0, S = ARMOR_SETS[sid];
+    if (c >= 2) { add(S.b2); let tier = 2; if (c >= 3) { add(S.b3); tier = 3; } active.push({ sid, name: S.name, count: c, tier }); }
+  }
+  return { stats, active, counts };
+}
+
 // 職業ごとに扱える武器カテゴリ（標準武器＋相性の良い得物）。武器以外は誰でも装備可
 const CLASS_WEAPONS = {
   fighter:   ['sword', 'spear', 'mace'],

@@ -51,6 +51,9 @@ function grantXP(p, amount) {
 function computeDerived(p) {
   const cls = CLASSES[p.classId];
   const equip = sumEquipStats(p.equipment);
+  // 防具セットボーナスを装備ステータスに合算
+  const setb = setBonusStats(p.equipment).stats;
+  for (const k in setb) equip[k] = (equip[k] || 0) + setb[k];
   // 徳（永続パッシブ）
   const vVit = virtueLv(p, 'vitality'), vSwift = virtueLv(p, 'swift'), vEnd = virtueLv(p, 'endure'), vFor = virtueLv(p, 'fortune');
   // 一次ステータス = 基礎割り振り + 装備補正 + 徳（福徳=幸運）
