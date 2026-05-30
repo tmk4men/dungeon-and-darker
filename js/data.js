@@ -45,6 +45,34 @@ const SKILLS = {
   // ランサー
   charge:      { name: 'チャージ', icon: '➤', mp: 8, cd: 3, kind: 'dash', dist: 210, dmg: 1.6, scaling: 'STR', radius: 44, color: '#bfe3ff', knock: 160, desc: '突進して薙ぎ払う' },
   impale:      { name: 'インペイル', icon: '🔱', mp: 11, cd: 2.6, kind: 'projectile', scaling: 'DEX', dmg: 1.7, projSpeed: 760, radius: 11, color: '#ffd479', pierce: 99, desc: '敵を貫く高速の刺突' },
+
+  // --- 拡張プール用スキル ---
+  cleave:      { name: 'クリーブ', icon: '🪓', mp: 9, cd: 2.4, kind: 'melee', scaling: 'STR', dmg: 1.5, range: 96, arc: 2.4, color: '#ffd0a0', knock: 120, desc: '広範囲を薙ぎ払う' },
+  rally:       { name: 'ラリー', icon: '📣', mp: 12, cd: 10, kind: 'buff', stat: 'patk', mult: 1.4, dur: 8, color: '#ffe08a', desc: '8秒間 攻撃UP' },
+  leap:        { name: 'リープスマッシュ', icon: '⬆️', mp: 14, cd: 5, kind: 'dash', dist: 200, dmg: 1.6, scaling: 'STR', radius: 70, color: '#ff8a5b', knock: 220, desc: '跳躍して着地点に衝撃' },
+  warcry:      { name: 'ウォークライ', icon: '🗣️', mp: 12, cd: 11, kind: 'buff', stat: 'defense', mult: 1.6, dur: 7, color: '#ffce6b', selfDef: 1, desc: '7秒間 防御UP＋恐慌' },
+  volley:      { name: 'ヴォレイ', icon: '☔', mp: 14, cd: 4, kind: 'projectile', scaling: 'DEX', dmg: 0.6, projSpeed: 600, radius: 7, color: '#ffe08a', count: 7, spread: 0.7, desc: '7本の矢を扇状に乱射' },
+  fan_knives:  { name: 'ファンナイフ', icon: '🔪', mp: 10, cd: 3, kind: 'projectile', scaling: 'DEX', dmg: 0.7, projSpeed: 620, radius: 7, color: '#e6e6e6', count: 5, spread: 1.0, desc: '短剣を扇状に投擲' },
+  smoke:       { name: 'スモーク', icon: '💨', mp: 10, cd: 9, kind: 'buff', stat: 'speed', mult: 1.5, dur: 5, color: '#cfcfe0', desc: '5秒間 高速移動' },
+  bless:       { name: 'ブレス', icon: '🙏', mp: 12, cd: 10, kind: 'buff', stat: 'patk', mult: 1.35, dur: 9, color: '#fff1a6', desc: '9秒間 攻撃UP' },
+  holy_nova:   { name: 'ホーリーノヴァ', icon: '🌟', mp: 16, cd: 6, kind: 'nova', scaling: 'WIS', dmg: 1.2, radius: 150, color: '#fff1a6', holy: true, desc: '聖光で周囲を浄化（アンデッド特効）' },
+  arcane_orb:  { name: 'アーケインオーブ', icon: '🔮', mp: 12, cd: 2, kind: 'projectile', scaling: 'WILL', dmg: 1.6, projSpeed: 360, radius: 14, color: '#7f9fff', pierce: 99, desc: 'ゆっくり進む貫通の魔力球' },
+  blink:       { name: 'ブリンク', icon: '✨', mp: 8, cd: 4, kind: 'dash', dist: 240, dmg: 0.6, scaling: 'WILL', radius: 30, color: '#9fd0ff', desc: '瞬間移動で間合いを取る' },
+  shadow_bolt: { name: 'シャドウボルト', icon: '🟣', mp: 9, cd: 1.6, kind: 'projectile', scaling: 'WILL', dmg: 1.4, projSpeed: 480, radius: 14, color: '#9b4dff', desc: '闇の弾を放つ' },
+  sweep:       { name: 'スイープ', icon: '🌀', mp: 10, cd: 2.6, kind: 'melee', scaling: 'STR', dmg: 1.4, range: 124, arc: 1.4, color: '#d8d2c0', knock: 100, desc: '槍で遠く広く薙ぐ' },
+};
+
+// 各職業のスキルプール（タウンで2つ選んで装備）
+const CLASS_SKILL_POOL = {
+  fighter:   ['slash_wave', 'shield_wall', 'cleave', 'rally'],
+  barbarian: ['whirlwind', 'reckless', 'leap', 'warcry'],
+  ranger:    ['multishot', 'piercing', 'volley', 'smoke'],
+  rogue:     ['dash_strike', 'poison_dart', 'fan_knives', 'smoke'],
+  cleric:    ['heal', 'smite', 'bless', 'holy_nova'],
+  mage:      ['firebolt', 'frost_nova', 'arcane_orb', 'blink'],
+  paladin:   ['shield_bash', 'smite', 'heal', 'holy_nova'],
+  warlock:   ['life_drain', 'curse_nova', 'shadow_bolt', 'bless'],
+  lancer:    ['charge', 'impale', 'sweep', 'leap'],
 };
 
 // --- 職業 ---
@@ -142,6 +170,28 @@ const AFFIXES = [
   { name: 'の幸運', stats: { LUCK: 2 } }, { name: 'の守護', stats: { defense: 3 } },
   { name: 'の鋭さ', stats: { patk: 3 } }, { name: 'の魔導', stats: { matk: 3 } },
   { name: 'の致命', stats: { crit: 0.05 } }, { name: 'の生命', stats: { hpmax: 18 } },
+  { name: 'の吸血', stats: { lifesteal: 0.04 } },
+];
+
+// レジェンダリ固有効果（強力・1つ付与）
+const UNIQUE_AFFIXES = [
+  { name: '【吸血鬼】', stats: { lifesteal: 0.09 } },
+  { name: '【疾風】', stats: { AGI: 5 } },
+  { name: '【巨人】', stats: { STR: 5, hpmax: 35 } },
+  { name: '【賢者】', stats: { WILL: 5, mpmax: 25 } },
+  { name: '【処刑人】', stats: { crit: 0.1 } },
+  { name: '【守護神】', stats: { defense: 8, hpmax: 25 } },
+  { name: '【幸運】', stats: { LUCK: 6 } },
+];
+
+// --- エリート修飾子 ---
+const ELITE_MODS = [
+  { name: '迅速の', color: '#7fe0ff', hp: 1.2, atk: 1.0, speed: 1.45, size: 0.95 },
+  { name: '巨躯の', color: '#ff9a5b', hp: 2.0, atk: 1.4, speed: 0.85, size: 1.4 },
+  { name: '灼熱の', color: '#ff5b3c', hp: 1.3, atk: 1.1, speed: 1.0, size: 1.05, onHit: { dot: { dmg: 5, dur: 3 } } },
+  { name: '猛毒の', color: '#7fe07f', hp: 1.3, atk: 1.0, speed: 1.0, size: 1.05, onHit: { slow: { mult: 0.5, dur: 2.5 }, dot: { dmg: 3, dur: 4 } } },
+  { name: '再生の', color: '#5fe0c0', hp: 1.6, atk: 1.1, speed: 0.95, size: 1.1, regen: 0.02 },
+  { name: '魔導の', color: '#c77dff', hp: 1.3, atk: 1.5, speed: 1.0, size: 1.0 },
 ];
 
 // --- 敵 ---

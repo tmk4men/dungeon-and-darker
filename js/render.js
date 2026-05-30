@@ -40,6 +40,12 @@ const Render = {
   render(game) {
     const ctx = this.ctx, dgn = game.dgn, T = CONFIG.TILE;
     this.updateCamera(game.player, dgn);
+    // 画面シェイク
+    if (game.shake && game.shake.t > 0) {
+      const m = game.shake.mag * (game.shake.t / 0.18);
+      this.cam.x += (Math.random() - 0.5) * m;
+      this.cam.y += (Math.random() - 0.5) * m;
+    }
 
     ctx.fillStyle = '#05060a';
     ctx.fillRect(0, 0, CONFIG.VIEW_W, CONFIG.VIEW_H);
@@ -260,6 +266,9 @@ const Render = {
     const s = this.worldToScreen(p.x, p.y);
     const r = CONFIG.PLAYER_R;
     ctx.save(); ctx.translate(s.x, s.y);
+    // 回避中/無敵中は半透明＋残像で表現
+    if (p.dodgeT > 0) ctx.globalAlpha = 0.55;
+    else if (p.invuln > 0) ctx.globalAlpha = 0.5 + Math.sin(performance.now() / 40) * 0.3;
     // 影
     ctx.fillStyle = 'rgba(0,0,0,0.4)';
     ctx.beginPath(); ctx.ellipse(0, r * 0.7, r, r * 0.5, 0, 0, TAU); ctx.fill();
@@ -288,29 +297,63 @@ const Render = {
   drawEnemy(ctx, e) {
     const def = ENEMIES[e.type];
     const s = this.worldToScreen(e.x, e.y);
+    const r = e.r;
+    const t = performance.now() / 1000;
+
+    // 予備動作テレゴラフ（攻撃の予兆＝回避の合図）
+    if (e.windT > 0) {
+      const prog = 1 - e.windT / e.windMax;
+      ctx.save(); ctx.translate(s.x, s.y);
+      if (def.behavior === 'ranged') {
+        ctx.strokeStyle = `rgba(255,70,70,${0.3 + prog * 0.5})`;
+        ctx.lineWidth = 2 + prog * 2; ctx.setLineDash([8, 6]);
+        ctx.beginPath(); ctx.moveTo(0, -6);
+        ctx.lineTo(Math.cos(e.facing) * 460, Math.sin(e.facing) * 460 - 6); ctx.stroke();
+        ctx.setLineDash([]);
+      } else {
+        ctx.fillStyle = `rgba(255,60,60,${0.18 + prog * 0.4})`;
+        ctx.beginPath(); ctx.moveTo(0, -6);
+        ctx.arc(0, -6, (def.range + r) * (0.5 + prog * 0.5), e.facing - 0.8, e.facing + 0.8);
+        ctx.closePath(); ctx.fill();
+      }
+      ctx.restore();
+    }
+
     ctx.save(); ctx.translate(s.x, s.y);
-    const r = def.r;
+    // エリートのオーラ
+    if (e.elite) {
+      const pr = 0.6 + Math.sin(t * 5) * 0.25;
+      ctx.strokeStyle = hexA(e.elite.color, pr);
+      ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.arc(0, -6, r + 4 + Math.sin(t * 4) * 1.5, 0, TAU); ctx.stroke();
+      ctx.fillStyle = hexA(e.elite.color, 0.12);
+      ctx.beginPath(); ctx.arc(0, -6, r + 6, 0, TAU); ctx.fill();
+    }
     ctx.fillStyle = 'rgba(0,0,0,0.4)';
     ctx.beginPath(); ctx.ellipse(0, r * 0.7, r, r * 0.5, 0, 0, TAU); ctx.fill();
     const by = -6;
     const hit = e.hitFlash > 0;
-    ctx.fillStyle = hit ? '#ffffff' : shade(def.color, -0.1);
+    const baseCol = e.elite ? e.elite.color : def.color;
+    ctx.fillStyle = hit ? '#ffffff' : shade(baseCol, -0.1);
     ctx.beginPath(); ctx.arc(0, by, r, 0, TAU); ctx.fill();
     if (!hit) {
-      ctx.fillStyle = shade(def.color, 0.18);
+      ctx.fillStyle = shade(baseCol, 0.18);
       ctx.beginPath(); ctx.arc(0, by - 2, r - 4, 0, TAU); ctx.fill();
     }
     // 目
     if (!hit) {
-      ctx.fillStyle = def.boss ? '#ff3b3b' : '#ffe9a8';
+      ctx.fillStyle = def.boss ? '#ff3b3b' : (e.elite ? '#fff' : '#ffe9a8');
       const ex = Math.cos(e.facing) * 3, ey = Math.sin(e.facing) * 3;
       ctx.beginPath(); ctx.arc(-3 + ex, by - 2 + ey, 1.8, 0, TAU); ctx.fill();
       ctx.beginPath(); ctx.arc(3 + ex, by - 2 + ey, 1.8, 0, TAU); ctx.fill();
     }
-    this.drawBar(ctx, -r, by - r - 7, r * 2, def.boss ? 6 : 4, e.hp / e.maxhp, def.boss ? '#ff6a4d' : '#e0574d', '#2a0808');
+    this.drawBar(ctx, -r, by - r - 7, r * 2, def.boss ? 6 : 4, e.hp / e.maxhp, def.boss ? '#ff6a4d' : (e.elite ? hexA(e.elite.color, 1) : '#e0574d'), '#2a0808');
     if (def.boss) {
       ctx.fillStyle = '#ffd27a'; ctx.font = 'bold 11px sans-serif'; ctx.textAlign = 'center';
       ctx.fillText(def.name, 0, by - r - 12);
+    } else if (e.elite) {
+      ctx.fillStyle = e.elite.color; ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText(e.elite.name + def.name, 0, by - r - 11);
     }
     ctx.restore();
   },

@@ -10,6 +10,7 @@ function newProfile(classId) {
     classId,
     gold: 80,
     level: 1, xp: 0, points: 0,
+    loadout: [...cls.skills],            // 装備中スキル2つ（プールから選択）
     baseAttrs: { ...cls.base },          // 職業基礎＋レベルで割り振った分
     equipment: { weapon: null, head: null, chest: null, hands: null, legs: null, ring: null, torch: null },
     potions: new Array(CONFIG.POTION_SLOTS).fill(null),
@@ -68,6 +69,7 @@ function computeDerived(p) {
     mpregen: 2.4 + attr.WIS * 0.22,
     healPow: 1 + attr.WIS * 0.05,
     magicResist: clamp(attr.WIS * 0.006, 0, 0.5),
+    lifesteal: equip.lifesteal || 0,
     hasTorch: !!p.equipment.torch,
   };
   d.vision = (d.hasTorch ? CONFIG.TORCH_VISION : CONFIG.BASE_VISION);

@@ -31,6 +31,8 @@
       <div id="extract"></div>
       <!-- 右下：スキル＆ポーション -->
       <div id="skillbar"></div>
+      <!-- 回避ローリング -->
+      <button id="dodgebtn" class="dodgebtn">回避<span>ROLL</span></button>
       <!-- 操作ヒント -->
       <div class="hint left-hint">移動</div>
       <div class="hint right-hint">スキル選択→ここをドラッグで攻撃</div>
@@ -62,6 +64,9 @@
     document.getElementById('abandon').addEventListener('click', () => {
       if (Game.state === 'dungeon' && confirm('退却しますか？（持ち込んだ装備・戦利品を失います）')) Game.abandon();
     });
+    // 回避ローリング
+    const dodgeBtn = document.getElementById('dodgebtn');
+    dodgeBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); Game.dodge(); });
     // ミュート
     document.getElementById('mute').addEventListener('click', (e) => {
       const m = Audio2.toggleMute();

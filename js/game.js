@@ -15,6 +15,8 @@ const Game = {
   run: null,
   extractT: 0,
   paused: false,
+  hitStop: 0,
+  shake: { t: 0, mag: 0 },
   msg: '', msgT: 0,
 
   // ---------- 起動 ----------
@@ -62,8 +64,9 @@ const Game = {
       x: this.dgn.startX, y: this.dgn.startY, vx: 0, vy: 0, facing: -Math.PI / 2,
       hp: d.hpmax, mp: d.mpmax, derived: d, classId: this.profile.classId,
       skillCd: [0, 0], attackCd: 0, potionCd: 0, invuln: 0, buffs: [], dead: false,
-      slowT: 0, slowMul: 1, zoneTick: 0,
-      skills: CLASSES[this.profile.classId].skills, potions: this.profile.potions.map(p => p ? { ...p } : null),
+      slowT: 0, slowMul: 1, zoneTick: 0, dodgeCd: 0, dodgeT: 0, dodgeDir: 0, dotT: 0, dotDmg: 0, dotAcc: 0,
+      skills: (this.profile.loadout && this.profile.loadout.length === 2) ? this.profile.loadout : CLASSES[this.profile.classId].skills,
+      potions: this.profile.potions.map(p => p ? { ...p } : null),
     };
 
     // 敵生成
@@ -83,17 +86,25 @@ const Game = {
     this.toast(`ダンジョン 第${floor}層へ — 生きて脱出せよ`);
   },
 
-  makeEnemy(type, x, y) {
+  makeEnemy(type, x, y, forceElite) {
     const def = ENEMIES[type];
     const sc = 1 + (this.floor - 1) * 0.16;
-    return {
+    const e = {
       type, x, y, vx: 0, vy: 0, facing: rand(0, TAU),
       maxhp: Math.round(def.hp * sc), hp: Math.round(def.hp * sc),
       atk: def.atk * sc, def: def.def, speed: def.speed,
       r: def.r, state: 'idle', atkCd: rand(0, 1), wanderT: 0, wanderAng: rand(0, TAU),
       hitFlash: 0, dead: false, slowT: 0, slowMul: 1, dotT: 0, dotDmg: 0, knockX: 0, knockY: 0,
-      stunT: 0, summonCd: rand(4, 7),
+      stunT: 0, summonCd: rand(4, 7), windT: 0, windMax: 0, pending: null, elite: null, regenT: 0,
     };
+    // エリート抽選（ボス以外）
+    if (!def.boss && (forceElite || Math.random() < 0.1 + this.floor * 0.025)) {
+      const mod = choice(ELITE_MODS);
+      e.elite = mod;
+      e.maxhp = Math.round(e.maxhp * mod.hp); e.hp = e.maxhp;
+      e.atk *= mod.atk; e.speed *= mod.speed; e.r = Math.round(e.r * mod.size);
+    }
+    return e;
   },
 
   // ---------- メインループ ----------
@@ -104,7 +115,10 @@ const Game = {
     this.time += dt;
 
     if (this.state === 'dungeon' && !this.paused) {
-      this.update(dt);
+      // ヒットストップ：一瞬だけ更新を止めて打撃の重みを出す
+      if (this.hitStop > 0) { this.hitStop -= dt; }
+      else this.update(dt);
+      if (this.shake.t > 0) this.shake.t -= dt;
       Render.render(this);
       Input.poll();
       Input.drawSticks(Render.ctx);
@@ -126,20 +140,34 @@ const Game = {
     let sp = d.speed;
     for (const b of p.buffs) if (b.stat === 'speed') sp *= b.mult;
     if (p.slowT > 0) { p.slowT -= dt; sp *= p.slowMul; }
-    let mx = Input.move.x, my = Input.move.y;
-    const ml = len(mx, my);
-    if (ml > 0.05) {
-      const np = tryMove(this.dgn, p.x, p.y, CONFIG.PLAYER_R, mx * sp * dt, my * sp * dt);
-      p.x = np.x; p.y = np.y;
-      if (!Input.aimVec.active) p.facing = angleOf(mx, my);
+    if (p.dodgeT > 0) {
+      // 回避ローリング中：高速で移動（無敵）
+      p.dodgeT -= dt;
+      const ds = d.speed * 3.4;
+      const np = tryMove(this.dgn, p.x, p.y, CONFIG.PLAYER_R, Math.cos(p.dodgeDir) * ds * dt, Math.sin(p.dodgeDir) * ds * dt);
+      p.x = np.x; p.y = np.y; p.facing = p.dodgeDir;
+      this.particles.push({ x: p.x, y: p.y, vx: 0, vy: 0, r: 7, color: 'rgba(180,210,255,0.7)', life: 0.2, maxlife: 0.2 });
+    } else {
+      let mx = Input.move.x, my = Input.move.y;
+      const ml = len(mx, my);
+      if (ml > 0.05) {
+        const np = tryMove(this.dgn, p.x, p.y, CONFIG.PLAYER_R, mx * sp * dt, my * sp * dt);
+        p.x = np.x; p.y = np.y;
+        if (!Input.aimVec.active) p.facing = angleOf(mx, my);
+      }
     }
-    // デスクトップ：マウスで照準
-    if (!Input.aimVec.active && (Input.keys[' '] || Input.mouse.down)) { }
+
+    // 継続ダメージ（プレイヤー）
+    if (p.dotT > 0) {
+      p.dotT -= dt; p.dotAcc += dt;
+      if (p.dotAcc >= 0.5) { p.dotAcc = 0; this.hurtDot(p.dotDmg); }
+    }
 
     // タイマー
     p.attackCd = Math.max(0, p.attackCd - dt);
     p.potionCd = Math.max(0, p.potionCd - dt);
     p.invuln = Math.max(0, p.invuln - dt);
+    p.dodgeCd = Math.max(0, p.dodgeCd - dt);
     p.skillCd[0] = Math.max(0, p.skillCd[0] - dt);
     p.skillCd[1] = Math.max(0, p.skillCd[1] - dt);
     p.mp = Math.min(d.mpmax, p.mp + d.mpregen * dt);
@@ -178,6 +206,7 @@ const Game = {
     if (k['1']) this.selectSkill(0);
     if (k['2']) this.selectSkill(1);
     if (k['0'] || k['`']) this.selectSkill(-1);
+    if (k['shift']) { this.dodge(); }
     if (k['q']) { this.usePotion(0); k['q'] = false; }
     if (k['e']) { this.usePotion(1); k['e'] = false; }
     // スペース or 左クリックでマウス方向に発射
@@ -296,7 +325,7 @@ const Game = {
       r: o.r || 8, color: o.color || '#fff', dmg: o.dmg || 5,
       pierce: o.pierce || 0, hits: new Set(), explode: o.explode || 0,
       dot: o.dot, slow: o.slow, holy: o.holy, knock: o.knock || 0,
-      lifesteal: o.lifesteal, stun: o.stun,
+      lifesteal: o.lifesteal, stun: o.stun, onHit: o.onHit,
       crit: o.crit || 0, critDmg: o.critDmg || 1.5, life: o.life || 1.5, maxlife: o.life || 1.5,
     });
   },
@@ -318,7 +347,9 @@ const Game = {
       } else {
         const p = this.player;
         if (!p.dead && p.invuln <= 0 && dist(pr.x, pr.y, p.x, p.y) <= pr.r + CONFIG.PLAYER_R) {
-          this.hurtPlayer(pr.dmg, true); pr.life = 0;
+          this.hurtPlayer(pr.dmg, true);
+          if (pr.onHit) this.applyOnHitToPlayer(pr.onHit);
+          pr.life = 0;
         }
       }
     }
@@ -348,13 +379,15 @@ const Game = {
     if (opt.slow) { e.slowT = opt.slow.dur; e.slowMul = opt.slow.mult; }
     if (opt.knock) { e.knockX += Math.cos(ang) * opt.knock; e.knockY += Math.sin(ang) * opt.knock; }
     if (opt.stun) { e.stunT = Math.max(e.stunT, def.boss ? opt.stun * 0.4 : opt.stun); }
-    if (opt.lifesteal) {
-      const heal = dmg * opt.lifesteal;
+    const lifesteal = (opt.lifesteal || 0) + (this.player.derived.lifesteal || 0);
+    if (lifesteal > 0) {
+      const heal = dmg * lifesteal;
       this.player.hp = Math.min(this.player.derived.hpmax, this.player.hp + heal);
-      this.addFloat(this.player.x, this.player.y - 24, '+' + Math.round(heal), '#ff6ea0', 14);
+      if (heal >= 1) this.addFloat(this.player.x, this.player.y - 24, '+' + Math.round(heal), '#ff6ea0', 13);
     }
     this.addFloat(e.x, e.y - e.r - 6, '' + dmg, crit ? '#ffd24a' : '#ffffff', crit ? 22 : 15);
-    if (crit) this.burst(e.x, e.y, '#ffd24a', 6);
+    if (crit) { this.burst(e.x, e.y, '#ffd24a', 6); this.hitStop = Math.max(this.hitStop, 0.05); this.addShake(4); }
+    else this.hitStop = Math.max(this.hitStop, 0.02);
     Audio2.play(crit ? 'crit' : 'hit');
     if (e.hp <= 0) this.killEnemy(e);
   },
@@ -363,18 +396,22 @@ const Game = {
     if (e.dead) return;
     e.dead = true; e.deathT = 0;
     const def = ENEMIES[e.type];
-    this.burst(e.x, e.y, def.color, 16);
+    this.burst(e.x, e.y, e.elite ? e.elite.color : def.color, e.elite ? 24 : 16);
     Audio2.play(def.boss ? 'bossdie' : 'die');
+    this.hitStop = Math.max(this.hitStop, def.boss ? 0.12 : 0.04);
+    this.addShake(def.boss ? 16 : (e.elite ? 7 : 3));
     this.run.kills++;
     // ゴールド
-    const g = randInt(def.gold[0], def.gold[1]);
+    let g = randInt(def.gold[0], def.gold[1]);
+    if (e.elite) g = Math.round(g * 2.2);
     this.run.gold += g;
     // ドロップ
-    const dropChance = def.boss ? 1 : 0.4;
+    const dropChance = def.boss ? 1 : (e.elite ? 1 : 0.4);
     if (Math.random() < dropChance) {
-      const n = def.boss ? 3 : 1;
+      const n = def.boss ? 3 : (e.elite ? 2 : 1);
+      const luckBonus = (def.boss ? 8 : e.elite ? 5 : 0);
       for (let i = 0; i < n; i++) {
-        this.groundItems.push({ x: e.x + rand(-14, 14), y: e.y + rand(-14, 14), item: randomLoot(this.floor, this.derived.attr.LUCK, def.boss ? {} : {}) });
+        this.groundItems.push({ x: e.x + rand(-14, 14), y: e.y + rand(-14, 14), item: randomLoot(this.floor + (e.elite ? 1 : 0), this.derived.attr.LUCK + luckBonus) });
       }
     }
     // スライム分裂
@@ -400,8 +437,20 @@ const Game = {
     p.hp -= dmg; p.invuln = 0.25;
     this.addFloat(p.x, p.y - 26, '-' + dmg, '#ff6a5a', 17);
     UI.flashDamage();
+    this.addShake(7);
     Audio2.play('hurt');
   },
+
+  // 継続ダメージ（無敵・回避を貫通）
+  hurtDot(amount) {
+    const p = this.player;
+    if (p.dead) return;
+    let dmg = Math.max(1, Math.round(amount * (1 - p.derived.magicResist * 0.5)));
+    p.hp -= dmg;
+    this.addFloat(p.x, p.y - 26, '-' + dmg, '#ff9a3c', 14);
+  },
+
+  addShake(mag) { if (mag > this.shake.mag || this.shake.t <= 0) this.shake.mag = mag; this.shake.t = Math.max(this.shake.t, 0.18); },
 
   // ---------- 敵AI ----------
   updateEnemy(e, dt) {
@@ -416,11 +465,21 @@ const Game = {
     }
     // DoT
     if (e.dotT > 0) { e.dotT -= dt; e._dotAcc = (e._dotAcc || 0) + dt; if (e._dotAcc >= 0.5) { e._dotAcc = 0; e.hp -= e.dotDmg; this.addFloat(e.x, e.y - e.r, '' + e.dotDmg, '#7fe07f', 12); if (e.hp <= 0) { this.killEnemy(e); return; } } }
+    // 再生エリート
+    if (e.elite && e.elite.regen) e.hp = Math.min(e.maxhp, e.hp + e.maxhp * e.elite.regen * dt * 60);
     // スロー
     let spd = e.speed;
     if (e.slowT > 0) { e.slowT -= dt; spd *= e.slowMul; }
     // スタン中は行動不能
     if (e.stunT > 0) { e.stunT -= dt; return; }
+
+    // 予備動作中：溜め切ったら攻撃実行（この間は動かない＝回避のチャンス）
+    if (e.windT > 0) {
+      e.windT -= dt;
+      e.facing = rotateToward(e.facing, angleOf(p.x - e.x, p.y - e.y), 2.5 * dt);
+      if (e.windT <= 0) this.executeAttack(e, def);
+      return;
+    }
 
     const dd = dist(e.x, e.y, p.x, p.y);
     const aggro = dd < def.sight && this.hasLoS(e.x, e.y, p.x, p.y);
@@ -431,16 +490,10 @@ const Game = {
       if (def.behavior === 'ranged') {
         if (dd > def.range * 0.8) this.moveEnemy(e, e.facing, spd, dt);
         else if (dd < def.range * 0.45) this.moveEnemy(e, e.facing + Math.PI, spd * 0.7, dt);
-        if (dd < def.range && e.atkCd <= 0 && this.hasLoS(e.x, e.y, p.x, p.y)) {
-          e.atkCd = 1.6;
-          this.spawnProjectile('enemy', e.x, e.y, e.facing, { speed: def.projSpeed, dmg: e.atk, r: 8, color: def.magic ? '#c77dff' : '#cfcfcf', life: 2.2 });
-        }
+        if (dd < def.range && e.atkCd <= 0 && this.hasLoS(e.x, e.y, p.x, p.y)) this.startWindup(e, def, def.boss ? 0.45 : 0.55);
       } else {
         if (dd > def.range) this.moveEnemy(e, e.facing, spd, dt);
-        else if (e.atkCd <= 0) {
-          e.atkCd = 1.0; this.hurtPlayer(e.atk, false); this.burst(p.x, p.y, '#ff8a6a', 6);
-          if (def.web) { p.slowT = 2; p.slowMul = 0.55; this.addFloat(p.x, p.y - 30, '🕸 鈍足', '#b0d0a0', 13); }
-        }
+        else if (e.atkCd <= 0) this.startWindup(e, def, def.boss ? 0.4 : 0.5);
       }
       if (dd > def.sight * 1.4) e.state = 'idle';
     } else {
@@ -471,6 +524,51 @@ const Game = {
     const np = tryMove(this.dgn, e.x, e.y, e.r, Math.cos(ang) * spd * dt, Math.sin(ang) * spd * dt);
     // 他敵との簡易分離
     e.x = np.x; e.y = np.y;
+  },
+
+  startWindup(e, def, time) {
+    e.windT = time; e.windMax = time;
+  },
+
+  executeAttack(e, def) {
+    const p = this.player;
+    const onHit = e.elite && e.elite.onHit;
+    if (def.behavior === 'ranged') {
+      e.atkCd = 1.6;
+      e.facing = angleOf(p.x - e.x, p.y - e.y);
+      this.spawnProjectile('enemy', e.x, e.y, e.facing, {
+        speed: def.projSpeed, dmg: e.atk, r: 8, color: def.magic ? '#c77dff' : '#cfcfcf', life: 2.2,
+        onHit,
+      });
+      Audio2.play('shoot');
+    } else {
+      e.atkCd = 1.0;
+      const dd = dist(e.x, e.y, p.x, p.y);
+      if (dd <= def.range + CONFIG.PLAYER_R + 8) {
+        this.hurtPlayer(e.atk, false);
+        this.burst(p.x, p.y, '#ff8a6a', 6);
+        if (def.web) { p.slowT = 2; p.slowMul = 0.55; this.addFloat(p.x, p.y - 30, '🕸 鈍足', '#b0d0a0', 13); }
+        if (onHit) this.applyOnHitToPlayer(onHit);
+      }
+    }
+  },
+
+  applyOnHitToPlayer(onHit) {
+    const p = this.player;
+    if (onHit.slow) { p.slowT = Math.max(p.slowT, onHit.slow.dur); p.slowMul = onHit.slow.mult; }
+    if (onHit.dot) { p.dotT = onHit.dot.dur; p.dotDmg = onHit.dot.dmg; this.addFloat(p.x, p.y - 30, '🔥', '#ff7a3c', 14); }
+  },
+
+  // 回避ローリング
+  dodge() {
+    const p = this.player;
+    if (p.dead || p.dodgeCd > 0 || p.dodgeT > 0) return;
+    let dir;
+    if (len(Input.move.x, Input.move.y) > 0.2) dir = angleOf(Input.move.x, Input.move.y);
+    else dir = p.facing;
+    p.dodgeT = 0.2; p.dodgeDir = dir; p.dodgeCd = 1.1; p.invuln = 0.32;
+    this.burst(p.x, p.y, '#cfe3ff', 8);
+    Audio2.play('swing');
   },
 
   hasLoS(x1, y1, x2, y2) {

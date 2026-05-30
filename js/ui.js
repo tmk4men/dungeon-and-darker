@@ -2,7 +2,7 @@
 // ui.js — DOM UI（タウン / 育成 / 装備 / 倉庫 / ショップ / HUD / リザルト）
 // ============================================================
 const STAT_NAMES = {
-  patk: '物理攻撃', matk: '魔法攻撃', defense: '防御', crit: '会心率',
+  patk: '物理攻撃', matk: '魔法攻撃', defense: '防御', crit: '会心率', lifesteal: '吸血',
   hpmax: '最大HP', mpmax: '最大MP', STR: '筋力', VIG: '体力', AGI: '敏捷',
   DEX: '器用', WILL: '意志', WIS: '精神', LUCK: '幸運',
 };
@@ -13,10 +13,26 @@ function statLine(stats) {
   for (const k in stats) {
     let v = stats[k];
     const nm = STAT_NAMES[k] || k;
-    if (k === 'crit') parts.push(`${nm} +${Math.round(v * 100)}%`);
+    if (k === 'crit' || k === 'lifesteal') parts.push(`${nm} +${Math.round(v * 100)}%`);
     else parts.push(`${nm} ${v >= 0 ? '+' : ''}${v}`);
   }
   return parts.join(' / ');
+}
+
+// 装備差分（同スロットの現装備との比較）
+function compareLine(it, equipped) {
+  if (!equipped) return '<span class="cmp new">新規装備</span>';
+  const keys = new Set([...Object.keys(it.stats), ...Object.keys(equipped.stats)]);
+  const parts = [];
+  for (const k of keys) {
+    const a = it.stats[k] || 0, b = equipped.stats[k] || 0;
+    const d = a - b;
+    if (Math.abs(d) < 0.0001) continue;
+    const pct = (k === 'crit' || k === 'lifesteal');
+    const val = pct ? `${d > 0 ? '+' : ''}${Math.round(d * 100)}%` : `${d > 0 ? '+' : ''}${d}`;
+    parts.push(`<span class="cmp ${d > 0 ? 'up' : 'down'}">${STAT_NAMES[k] || k} ${val}</span>`);
+  }
+  return parts.length ? parts.join(' ') : '<span class="cmp">変化なし</span>';
 }
 
 const UI = {
@@ -67,11 +83,13 @@ const UI = {
     const p = Game.profile, d = computeDerived(p);
     Game.derived = d;
     const cls = CLASSES[p.classId];
-    const nav = ['status', 'equip', 'stash', 'shop', 'deploy'];
-    const navName = { status: '⚔ ステータス', equip: '🛡 装備', stash: '🎒 倉庫', shop: '💰 ショップ', deploy: '🚪 出撃' };
+    const nav = ['status', 'skill', 'equip', 'forge', 'stash', 'shop', 'deploy'];
+    const navName = { status: '⚔ ステータス', skill: '✨ スキル', equip: '🛡 装備', forge: '🔨 鍛冶', stash: '🎒 倉庫', shop: '💰 ショップ', deploy: '🚪 出撃' };
     let body = '';
     if (tab === 'status') body = this.tabStatus(p, d, cls);
+    else if (tab === 'skill') body = this.tabSkill(p, d);
     else if (tab === 'equip') body = this.tabEquip(p, d);
+    else if (tab === 'forge') body = this.tabForge(p, d);
     else if (tab === 'stash') body = this.tabStash(p, d);
     else if (tab === 'shop') body = this.tabShop(p, d);
     else if (tab === 'deploy') body = this.tabDeploy(p, d);
@@ -100,7 +118,8 @@ const UI = {
       ['物理攻撃力', d.wtype.base + d.patkFlat], ['魔法攻撃力', d.wtype.base + d.matkFlat],
       ['防御', d.defense], ['移動速度', Math.round(d.speed)],
       ['会心率', Math.round(d.crit * 100) + '%'], ['会心ダメージ', Math.round(d.critDmg * 100) + '%'],
-      ['回避', Math.round(d.dodge * 100) + '%'], ['視界', d.hasTorch ? '広い(トーチ)' : '狭い'],
+      ['回避', Math.round(d.dodge * 100) + '%'], ['吸血', Math.round(d.lifesteal * 100) + '%'],
+      ['視界', d.hasTorch ? '広い(トーチ)' : '狭い'],
     ].map(r => `<div class="drow"><span>${r[0]}</span><b>${r[1]}</b></div>`).join('');
     return `<div class="cols">
       <div class="col">
@@ -122,6 +141,41 @@ const UI = {
     </div>`;
   },
 
+  tabSkill(p, d) {
+    if (!p.loadout) p.loadout = [...CLASSES[p.classId].skills];
+    const pool = CLASS_SKILL_POOL[p.classId] || CLASSES[p.classId].skills;
+    const cards = pool.map(sid => {
+      const s = SKILLS[sid]; const on = p.loadout.includes(sid);
+      return `<div class="skill-card ${on ? 'on' : ''}">
+        <div class="sc-top"><span class="sc-ic">${s.icon}</span><b>${s.name}</b></div>
+        <div class="sc-meta">${s.mp} MP ・ CD ${s.cd}s ・ ${s.scaling ? STAT_NAMES[s.scaling] + '依存' : '補助'}</div>
+        <div class="sc-desc">${s.desc}</div>
+        <button class="btn sm skilltoggle ${on ? '' : ''}" data-sid="${sid}" ${!on && p.loadout.length >= 2 ? 'disabled' : ''}>${on ? '✓ 装備中（外す）' : '装備する'}</button>
+      </div>`;
+    }).join('');
+    return `<div class="card"><h3>スキル選択 — 2つまで装備（現在 ${p.loadout.length}/2）</h3>
+      <p class="muted">ここで選んだ2つがダンジョンで使えます。スキル未選択時の右スティックは標準武器の通常攻撃です。</p>
+      <div class="skill-grid">${cards}</div></div>`;
+  },
+
+  tabForge(p, d) {
+    const items = [];
+    for (const slot in p.equipment) if (p.equipment[slot]) items.push({ it: p.equipment[slot], where: '装備中' });
+    for (const it of p.stash) if (canUpgrade(it) || canEnchant(it)) items.push({ it, where: '倉庫' });
+    if (!items.length) return `<div class="card"><div class="muted">強化できる装備がありません。武器・防具を入手しましょう。</div></div>`;
+    const rows = items.map(({ it, where }) => {
+      const upOk = canUpgrade(it), enOk = canEnchant(it);
+      return `<div class="inv-row">
+        <div>${this.rarityTag(it)} <span class="slot-tag">${where}</span><div class="eq-stat">${statLine(it.stats)}</div></div>
+        <div class="inv-act">
+          ${upOk ? `<button class="btn sm upg ${p.gold >= upgradeCost(it) ? '' : 'poor'}" data-uid="${it.uid}">強化+${(it.upgrade || 0) + 1}（${fmt(upgradeCost(it))}G）</button>` : `<span class="muted">強化MAX</span>`}
+          ${enOk ? `<button class="btn sm ench ${p.gold >= enchantCost(it) ? '' : 'poor'}" data-uid="${it.uid}">エンチャント（${fmt(enchantCost(it))}G）</button>` : ''}
+        </div></div>`;
+    }).join('');
+    return `<div class="card"><h3>🔨 鍛冶屋 — 強化／エンチャント</h3>
+      <p class="muted">強化（最大+5）で全ステータス上昇。エンチャント（最大2回）でランダムなステータスを付与。装備中の品もそのまま強化できます。</p>${rows}</div>`;
+  },
+
   tabEquip(p, d) {
     const slots = ['weapon', 'head', 'chest', 'hands', 'legs', 'ring', 'torch'];
     const slotHtml = slots.map(s => {
@@ -139,7 +193,9 @@ const UI = {
     // 装備可能な倉庫アイテム
     const equippable = p.stash.filter(it => ['weapon', 'head', 'chest', 'hands', 'legs', 'ring', 'torch'].includes(it.slot));
     const list = equippable.length ? equippable.map(it => `<div class="inv-row">
-        <div>${this.rarityTag(it)} <span class="slot-tag">${SLOT_NAMES[it.slot]}</span><div class="eq-stat">${statLine(it.stats)}</div></div>
+        <div>${this.rarityTag(it)} <span class="slot-tag">${SLOT_NAMES[it.slot]}</span>
+          <div class="eq-stat">${statLine(it.stats)}</div>
+          <div class="cmp-line">${compareLine(it, p.equipment[it.slot])}</div></div>
         <button class="btn sm equip" data-uid="${it.uid}">装備</button>
       </div>`).join('') : '<div class="muted">倉庫に装備品はありません</div>';
     return `<div class="cols">
@@ -182,9 +238,11 @@ const UI = {
   tabDeploy(p, d) {
     const eq = Object.values(p.equipment).filter(Boolean).map(it => this.rarityTag(it)).join('、') || 'なし';
     const pot = p.potions.filter(Boolean).map(it => it.name).join('、') || 'なし';
+    const lo = (p.loadout || CLASSES[p.classId].skills).map(sid => `${SKILLS[sid].icon} ${SKILLS[sid].name}`).join('、') || 'なし';
     return `<div class="cols">
       <div class="col"><div class="card">
         <h3>出撃準備</h3>
+        <p class="muted">装備スキル：${lo}</p>
         <p class="muted">持ち込む装備：${eq}</p>
         <p class="muted">ポーション：${pot}</p>
         <p class="warn">⚠ 死亡すると持ち込んだ装備・ポーション・取得品は全て失われます。脱出ポータルから帰還して初めて戦利品が確定します。</p>
@@ -233,6 +291,32 @@ const UI = {
       else this.toast('ゴールドが足りない');
     }));
     this.root.querySelectorAll('.refresh').forEach(b => b.addEventListener('click', () => { this.refreshShop(); reload(); }));
+    // スキル選択
+    this.root.querySelectorAll('.skilltoggle').forEach(b => b.addEventListener('click', () => {
+      const sid = b.dataset.sid;
+      if (!p.loadout) p.loadout = [...CLASSES[p.classId].skills];
+      if (p.loadout.includes(sid)) p.loadout = p.loadout.filter(x => x !== sid);
+      else if (p.loadout.length < 2) p.loadout.push(sid);
+      Audio2.play && Audio2.play('select');
+      reload();
+    }));
+    // 鍛冶：強化／エンチャント
+    const findItem = (uid) => {
+      for (const slot in p.equipment) if (p.equipment[slot] && p.equipment[slot].uid === uid) return p.equipment[slot];
+      return p.stash.find(x => x.uid === uid);
+    };
+    this.root.querySelectorAll('.upg').forEach(b => b.addEventListener('click', () => {
+      const it = findItem(+b.dataset.uid); if (!it) return;
+      const cost = upgradeCost(it);
+      if (p.gold < cost) { this.toast('ゴールドが足りない'); return; }
+      if (upgradeItem(it)) { p.gold -= cost; Audio2.play && Audio2.play('chest'); reload(); }
+    }));
+    this.root.querySelectorAll('.ench').forEach(b => b.addEventListener('click', () => {
+      const it = findItem(+b.dataset.uid); if (!it) return;
+      const cost = enchantCost(it);
+      if (p.gold < cost) { this.toast('ゴールドが足りない'); return; }
+      if (enchantItem(it)) { p.gold -= cost; Audio2.play && Audio2.play('levelup'); reload(); }
+    }));
     // 出撃
     this.root.querySelectorAll('.depth').forEach(b => b.addEventListener('click', () => { this.hideAll(); Game.enterDungeon(+b.dataset.f); }));
   },
@@ -299,6 +383,8 @@ const UI = {
     if (mt) mt.textContent = `${Math.round(p.mp)}/${Math.round(d.mpmax)}`;
     const info = document.getElementById('runinfo');
     if (info) info.textContent = `第${game.floor}層　撃破 ${game.run.kills}　戦利品 ${game.run.loot.length}　💰${game.run.gold}`;
+    const db = document.getElementById('dodgebtn');
+    if (db) db.classList.toggle('cool', p.dodgeCd > 0);
     const zi = document.getElementById('zoneinfo');
     if (zi && game.zone) {
       const t = game.runTime, z = game.zone;

@@ -93,6 +93,21 @@ button { font-family: inherit; cursor: pointer; color: var(--ink); }
 .val { font-size: 12px; color: var(--gold); }
 .rar { font-weight: 700; font-size: 13px; }
 
+/* skill select */
+.skill-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+.skill-card { background: #15151f; border: 1px solid var(--line); border-radius: 10px; padding: 12px; transition: .12s; }
+.skill-card.on { border-color: var(--gold); background: rgba(50,42,20,.5); box-shadow: 0 0 12px rgba(255,206,107,.2); }
+.sc-top { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 800; }
+.sc-ic { font-size: 22px; }
+.sc-meta { font-size: 11px; color: var(--mp); margin: 4px 0; }
+.sc-desc { font-size: 12px; color: var(--muted); line-height: 1.5; min-height: 36px; margin-bottom: 8px; }
+.skill-card .btn { width: 100%; }
+
+/* compare */
+.cmp-line { font-size: 11px; margin-top: 3px; display: flex; flex-wrap: wrap; gap: 4px 8px; }
+.cmp.up { color: #6fe08a; } .cmp.down { color: #ff7a6a; } .cmp.new { color: var(--gold); } .cmp { color: var(--muted); }
+.btn.poor { color: #b06a6a; border-color: #4a2a2a; }
+
 /* result */
 .result { max-width: 640px; }
 .res-title { font-size: 40px; font-weight: 900; margin-bottom: 4px; }
@@ -143,6 +158,14 @@ button { font-family: inherit; cursor: pointer; color: var(--ink); }
 .skcd { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 800; background: rgba(0,0,0,.55); border-radius: 12px; }
 .potbtn { width: 50px; height: 50px; border-radius: 12px; background: rgba(22,22,34,.86); border: 2px solid var(--line); display: flex; flex-direction: column; align-items: center; justify-content: center; }
 .potbtn.empty { opacity: .4; } .potic { font-size: 18px; } .potlbl { font-size: 8px; color: var(--muted); }
+
+.dodgebtn { position: absolute; bottom: max(18px, env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%);
+  width: 74px; height: 74px; border-radius: 50%; background: rgba(30,40,60,.82); border: 2px solid #4a6a9a;
+  color: #cfe0ff; font-size: 15px; font-weight: 800; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  pointer-events: auto; box-shadow: 0 0 14px rgba(80,130,200,.3); }
+.dodgebtn span { font-size: 8px; color: #7f9fd0; letter-spacing: 1px; }
+.dodgebtn.cool { opacity: .4; }
+.dodgebtn:active { transform: translateX(-50%) scale(.92); }
 
 .hint { position: absolute; bottom: 16px; font-size: 11px; color: rgba(255,255,255,.25); pointer-events: none; }
 .left-hint { left: 18%; } .right-hint { left: 50%; transform: translateX(-50%); bottom: 6px; }

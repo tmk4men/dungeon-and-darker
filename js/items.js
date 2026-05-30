@@ -24,7 +24,7 @@ function createItem(baseId, rarityKey) {
   const it = {
     uid: uid(), baseId, name: base.name, slot: base.slot, wtype: base.wtype,
     rarity: rk, stats: {}, value: base.value, potion: base.potion ? { ...base.potion } : null,
-    affixNames: [],
+    affixNames: [], upgrade: 0, enchants: 0,
   };
   // 基礎ステータスをレアリティ倍率で
   if (base.stats) for (const k in base.stats) {
@@ -40,6 +40,13 @@ function createItem(baseId, rarityKey) {
       it.affixNames.push(af.name);
       for (const k in af.stats) it.stats[k] = (it.stats[k] || 0) + af.stats[k];
     }
+    // レジェンダリは固有効果を1つ付与
+    if (rk === 'legendary') {
+      const uq = choice(UNIQUE_AFFIXES);
+      it.affixNames.unshift(uq.name);
+      it.unique = uq.name;
+      for (const k in uq.stats) it.stats[k] = (it.stats[k] || 0) + uq.stats[k];
+    }
   }
   // 売却価値（レア＆アフィックスで増加）
   it.value = Math.round(base.value * (0.6 + r.mult * 0.7) * (1 + it.affixNames.length * 0.25));
@@ -48,7 +55,40 @@ function createItem(baseId, rarityKey) {
 
 function itemDisplayName(it) {
   if (!it) return '';
-  return it.name + (it.affixNames.length ? ' ' + it.affixNames.join('') : '');
+  const up = it.upgrade ? ` +${it.upgrade}` : '';
+  return it.name + up + (it.affixNames.length ? ' ' + it.affixNames.join('') : '');
+}
+
+// 強化可能か（武器・防具のみ、最大+5）
+function canUpgrade(it) {
+  return it && ['weapon', 'head', 'chest', 'hands', 'legs', 'ring', 'torch'].includes(it.slot) && (it.upgrade || 0) < 5;
+}
+function upgradeCost(it) { return Math.round((it.value + 20) * ((it.upgrade || 0) + 1) * 1.4); }
+function upgradeItem(it) {
+  if (!canUpgrade(it)) return false;
+  it.upgrade = (it.upgrade || 0) + 1;
+  // 数値ステータスを底上げ（+1ごとに約12%）
+  for (const k in it.stats) {
+    if (k === 'crit' || k === 'lifesteal') it.stats[k] = Math.round((it.stats[k] * 1.1) * 1000) / 1000;
+    else it.stats[k] = it.stats[k] >= 0 ? Math.ceil(it.stats[k] * 1.12 + 0.5) : Math.floor(it.stats[k] * 1.12);
+  }
+  it.value = Math.round(it.value * 1.3);
+  return true;
+}
+
+// エンチャント可能か（最大+2個の追加アフィックス）
+function canEnchant(it) {
+  return it && ['weapon', 'head', 'chest', 'hands', 'legs', 'ring', 'torch'].includes(it.slot) && (it.enchants || 0) < 2;
+}
+function enchantCost(it) { return Math.round((it.value + 40) * ((it.enchants || 0) + 1) * 1.8); }
+function enchantItem(it) {
+  if (!canEnchant(it)) return false;
+  const af = choice(AFFIXES);
+  it.affixNames.push(af.name);
+  for (const k in af.stats) it.stats[k] = (it.stats[k] || 0) + af.stats[k];
+  it.enchants = (it.enchants || 0) + 1;
+  it.value = Math.round(it.value * 1.35);
+  return true;
 }
 
 // ランダムなドロップ品（階層と幸運で質が変動）
