@@ -50,9 +50,11 @@ const Game = {
   },
   applyClass(classId) {
     if (this.profile) {
-      const gold = this.profile.gold, stash = this.profile.stash, bounties = this.profile.bounties, ach = this.profile.achievements;
+      // 永続要素（所持金・倉庫・依頼・実績・転生/徳/称号スコア・戦績）は道を改めても引き継ぐ
+      const keep = {};
+      for (const k of ['gold', 'stash', 'bounties', 'achievements', 'rebirths', 'merit', 'virtues', 'bestScore', 'daily', 'runStats']) keep[k] = this.profile[k];
       this.profile = newProfile(classId);
-      this.profile.gold = gold; this.profile.stash = stash; this.profile.bounties = bounties; this.profile.achievements = ach;
+      Object.assign(this.profile, keep);
     } else {
       this.profile = newProfile(classId);
     }
