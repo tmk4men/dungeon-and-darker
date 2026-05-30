@@ -96,7 +96,7 @@ const Game = {
   enterDungeon() {
     this.floor = 1;
     this.derived = computeDerived(this.profile);
-    this.run = { bag: new Array(CONFIG.BAG_W * CONFIG.BAG_H).fill(null), kills: 0, gold: 0, startGold: this.profile.gold, karma: 0 };
+    this.run = { bag: newBag(), kills: 0, gold: 0, startGold: this.profile.gold, karma: 0 };
     this.selectedSkill = -1;
 
     // プレイヤー生成（持ち込み装備のスナップショット）
@@ -880,51 +880,47 @@ const Game = {
 
   updatePickups() { /* 自動拾得は廃止。バッグ画面で回収する */ },
 
-  // ---------- バッグ（マス制インベントリ） ----------
-  bagFreeIndex() { return this.run.bag.findIndex(x => !x); },
-  bagCount() { return this.run.bag.filter(Boolean).length; },
+  // ---------- バッグ（マス制・多マス占有） ----------
+  bagCount() { return this.run.bag.items.length; },
   bagAdd(item) {
-    const i = this.bagFreeIndex();
-    if (i < 0) return false;
-    this.run.bag[i] = item;
-    if (item.rarity === 'legendary') this.unlockAch('legendary');
-    return true;
+    const ok = bagAddItem(this.run.bag, item);
+    if (ok && item.rarity === 'legendary') this.unlockAch('legendary');
+    return ok;
   },
   // 近くの宝箱の中身 or 地上戦利品をバッグへ
   takeLoot(source, item) {
-    if (this.bagFreeIndex() < 0) { this.toast('バッグに空きがない'); Audio2.play('ui'); return false; }
-    this.bagAdd(item);
+    if (!this.bagAdd(item)) { this.toast('バッグに空きがない（整理が必要）'); Audio2.play('ui'); return false; }
     Audio2.play(RARITY_ORDER.indexOf(item.rarity) >= 3 ? 'coin' : 'ui');
     if (source === 'ground') { const i = this.groundItems.findIndex(g => g.item === item); if (i >= 0) this.groundItems.splice(i, 1); }
     else if (source && source.contents) { const i = source.contents.indexOf(item); if (i >= 0) source.contents.splice(i, 1); }
     return true;
   },
-  bagDrop(idx) {
-    const it = this.run.bag[idx]; if (!it) return;
-    this.run.bag[idx] = null;
-    this.groundItems.push({ x: this.player.x + rand(-16, 16), y: this.player.y + rand(-16, 16), item: it });
+  bagDrop(entry) {
+    if (!entry) return;
+    bagRemoveItem(this.run.bag, entry);
+    this.groundItems.push({ x: this.player.x + rand(-16, 16), y: this.player.y + rand(-16, 16), item: entry.item });
     Audio2.play('ui');
   },
-  bagUse(idx) {
-    const it = this.run.bag[idx]; if (!it || !it.potion) return;
+  bagUse(entry) {
+    const it = entry && entry.item; if (!it || !it.potion) return;
     const p = this.player;
     if (it.potion.hp) { p.hp = Math.min(p.derived.hpmax, p.hp + it.potion.hp); this.addFloat(p.x, p.y - 22, '+' + it.potion.hp, '#7dffa0', 16); }
     if (it.potion.mp) { p.mp = Math.min(p.derived.mpmax, p.mp + it.potion.mp); this.addFloat(p.x, p.y - 22, '+' + it.potion.mp, '#7db8ff', 16); }
-    this.run.bag[idx] = null; Audio2.play('potion');
+    bagRemoveItem(this.run.bag, entry); Audio2.play('potion');
   },
-  bagToPotionSlot(idx) {
-    const it = this.run.bag[idx]; if (!it || it.slot !== 'potion') return;
+  bagToPotionSlot(entry) {
+    const it = entry && entry.item; if (!it || it.slot !== 'potion') return;
     const p = this.player; const s = p.potions.findIndex(x => !x);
     if (s < 0) { this.toast('ポーション枠が満杯'); return; }
-    p.potions[s] = it; this.run.bag[idx] = null; UI.buildSkillBar(this); Audio2.play('ui');
+    p.potions[s] = it; bagRemoveItem(this.run.bag, entry); UI.buildSkillBar(this); Audio2.play('ui');
   },
-  bagEquip(idx) {
-    const it = this.run.bag[idx];
+  bagEquip(entry) {
+    const it = entry && entry.item;
     if (!it || !['weapon', 'head', 'chest', 'hands', 'legs', 'ring', 'torch'].includes(it.slot)) return;
     const prev = this.profile.equipment[it.slot];
+    bagRemoveItem(this.run.bag, entry);
     this.profile.equipment[it.slot] = it;
-    this.run.bag[idx] = prev || null; // 入れ替え（元装備はバッグへ）
-    // 派生再計算（HP上限変化に追従）
+    if (prev && !this.bagAdd(prev)) this.groundItems.push({ x: this.player.x + rand(-16, 16), y: this.player.y, item: prev });
     this.derived = computeDerived(this.profile);
     this.player.derived = this.derived;
     this.player.hp = Math.min(this.player.hp, this.derived.hpmax);
@@ -932,11 +928,14 @@ const Game = {
   },
   bagUnequip(slot) {
     const it = this.profile.equipment[slot]; if (!it) return;
-    if (this.bagFreeIndex() < 0) { this.toast('バッグに空きがない'); return; }
-    this.profile.equipment[slot] = null; this.bagAdd(it);
+    if (!this.bagAdd(it)) { this.toast('バッグに空きがない（整理が必要）'); return; }
+    this.profile.equipment[slot] = null;
     this.derived = computeDerived(this.profile); this.player.derived = this.derived;
     Audio2.play('ui');
   },
+  // バッグ内移動・回転
+  bagMove(entry, x, y) { if (bagFits(this.run.bag, x, y, entry.w, entry.h, entry)) { entry.x = x; entry.y = y; Audio2.play('ui'); return true; } return false; },
+  bagRotate(entry) { const nw = entry.h, nh = entry.w; if (nw === entry.w) return false; if (bagFits(this.run.bag, entry.x, entry.y, nw, nh, entry)) { entry.w = nw; entry.h = nh; Audio2.play('ui'); return true; } this.toast('回転できる空きがない'); return false; },
 
   openBag(chest) {
     if (this.state !== 'dungeon') return;
@@ -1122,7 +1121,7 @@ const Game = {
     saveProfile(this.profile);
     Audio2.stopAmbient();
     Audio2.play('death');
-    UI.showResult(false, { kills: this.run.kills, gold: 0, xp, lost, loot: this.run.bag.filter(Boolean) });
+    UI.showResult(false, { kills: this.run.kills, gold: 0, xp, lost, loot: this.run.bag.items.map(e => e.item) });
   },
 
   extract(portal) {
@@ -1136,7 +1135,7 @@ const Game = {
       this.toast('報酬ポータルで脱出！ボーナス獲得');
     }
     // 取得品をストレージへ、ゴールド加算
-    for (const it of this.run.bag) if (it) this.profile.stash.push(it);
+    for (const e of this.run.bag.items) this.profile.stash.push(e.item);
     this.profile.gold += this.run.gold;
     // 道中で使用/取得したポーションの状態を反映
     this.profile.potions = this.player.potions.map(x => x || null);
@@ -1147,10 +1146,10 @@ const Game = {
     if (this.floor >= 3) this.unlockAch('deep');
     if (this.profile.gold >= 1000) this.unlockAch('rich');
     if (this.profile.level >= 10) this.unlockAch('lvl10');
-    if (this.run.bag.some(it => it && it.rarity === 'legendary')) this.unlockAch('legendary');
+    if (this.run.bag.items.some(e => e.item.rarity === 'legendary')) this.unlockAch('legendary');
     this.progressBounty('extract', 1);
     this.progressBounty('floor', this.floor, true);
-    if (this.run.bag.some(it => it && RARITY_ORDER.indexOf(it.rarity) >= 3)) this.progressBounty('rarity', 1);
+    if (this.run.bag.items.some(e => RARITY_ORDER.indexOf(e.item.rarity) >= 3)) this.progressBounty('rarity', 1);
     this.profile.runStats.extracts++;
     this.profile.runStats.runs++;
     this.profile.runStats.kills += this.run.kills;
@@ -1160,7 +1159,7 @@ const Game = {
     Audio2.stopAmbient();
     Audio2.play('extract');
     if (leveled) setTimeout(() => Audio2.play('levelup'), 500);
-    UI.showResult(true, { kills: this.run.kills, gold: this.run.gold, xp, leveled, loot: this.run.bag.filter(Boolean) });
+    UI.showResult(true, { kills: this.run.kills, gold: this.run.gold, xp, leveled, loot: this.run.bag.items.map(e => e.item) });
   },
 
   abandon() {

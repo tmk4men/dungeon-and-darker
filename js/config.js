@@ -25,7 +25,7 @@ const CONFIG = {
   // スロット
   POTION_SLOTS: 2,
   // バッグ（マス制インベントリ）
-  BAG_W: 5, BAG_H: 4,
+  BAG_W: 6, BAG_H: 4,
 
   // バランス
   DEFENSE_K: 60,       // ダメージ軽減の係数

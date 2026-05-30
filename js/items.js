@@ -119,6 +119,44 @@ function randomLoot(floor, luck, opts = {}) {
   return createItem(base.id, rollRarity(luck, floor));
 }
 
+// --- アイテムの占有サイズ [w,h] ---
+function itemSize(it) {
+  if (!it) return [1, 1];
+  if (it.slot === 'weapon') return it.wtype === 'dagger' ? [1, 1] : [1, 2];
+  if (it.slot === 'chest') return [2, 2];
+  if (it.slot === 'legs') return [2, 1];
+  if (it.slot === 'treasure') { if (it.baseId === 'tr_crown') return [2, 1]; if (it.baseId === 'tr_goblet') return [1, 2]; return [1, 1]; }
+  return [1, 1];
+}
+
+// --- マス制バッグ ---
+function newBag() { return { w: CONFIG.BAG_W, h: CONFIG.BAG_H, items: [] }; }
+function bagOccExcept(bag, ignore) {
+  const o = new Array(bag.w * bag.h).fill(false);
+  for (const e of bag.items) { if (e === ignore) continue; for (let dy = 0; dy < e.h; dy++) for (let dx = 0; dx < e.w; dx++) { const cx = e.x + dx, cy = e.y + dy; if (cx < bag.w && cy < bag.h) o[cy * bag.w + cx] = true; } }
+  return o;
+}
+function bagFits(bag, x, y, w, h, ignore) {
+  if (x < 0 || y < 0 || x + w > bag.w || y + h > bag.h) return false;
+  const o = bagOccExcept(bag, ignore);
+  for (let dy = 0; dy < h; dy++) for (let dx = 0; dx < w; dx++) if (o[(y + dy) * bag.w + (x + dx)]) return false;
+  return true;
+}
+function bagFindFit(bag, w, h) {
+  for (let y = 0; y <= bag.h - h; y++) for (let x = 0; x <= bag.w - w; x++) if (bagFits(bag, x, y, w, h, null)) return { x, y };
+  return null;
+}
+function bagAddItem(bag, item) {
+  const sz = itemSize(item);
+  let pos = bagFindFit(bag, sz[0], sz[1]); let w = sz[0], h = sz[1];
+  if (!pos && sz[0] !== sz[1]) { pos = bagFindFit(bag, sz[1], sz[0]); w = sz[1]; h = sz[0]; }
+  if (!pos) return false;
+  bag.items.push({ item, x: pos.x, y: pos.y, w, h });
+  return true;
+}
+function bagRemoveItem(bag, entry) { const i = bag.items.indexOf(entry); if (i >= 0) bag.items.splice(i, 1); }
+function bagFreeCells(bag) { return bagOccExcept(bag, null).filter(x => !x).length; }
+
 // --- 重量 ---
 const WEIGHT_WEAPON = { dagger: 3, bow: 3.5, staff: 3, tome: 3.5, sword: 5, spear: 5.5, mace: 6, flail: 8, hammer: 9 };
 const WEIGHT_BASE = { a_hood: 2, a_robe: 2, a_tunic: 3.5, a_helm: 5, a_plate: 10, a_gloves: 2.5, a_greaves: 4, r_ring: 0.5, r_amulet: 0.5, t_torch: 1 };

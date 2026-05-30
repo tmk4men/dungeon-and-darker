@@ -270,11 +270,15 @@ button { font-family: inherit; cursor: pointer; color: var(--ink); }
 .bag-pane { background: rgba(12,9,5,.4); border: 1px solid var(--line); border-radius: 4px; padding: 12px; }
 .bag-pane h3 { font-family: var(--f-head); font-size: 12px; letter-spacing: 1px; color: var(--gold-bright); margin-bottom: 10px; text-transform: uppercase; }
 .loot-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid rgba(90,74,40,.18); flex-wrap: wrap; }
-.bag-grid { display: grid; gap: 4px; }
-.bag-cell { aspect-ratio: 1; background: rgba(8,8,14,.55); border: 1px solid var(--line); border-radius: 4px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
-.bag-cell.has { border-color: color-mix(in srgb, var(--rc, #c7a24c) 45%, #2a2433); background: radial-gradient(circle at 50% 45%, color-mix(in srgb, var(--rc, #c7a24c) 18%, transparent), rgba(8,8,14,.5) 72%); }
-.bag-cell.sel { border-color: var(--gold-bright); box-shadow: 0 0 10px rgba(236,205,126,.5); }
-.bag-ic { width: 78%; height: 78%; image-rendering: pixelated; object-fit: contain; }
+.bag-grid { display: grid; gap: 3px; width: 100%; max-width: 360px; margin: 0 auto; position: relative; }
+.bag-cell { background: rgba(8,8,14,.5); border: 1px solid var(--line); border-radius: 3px; cursor: pointer; }
+.bag-cell.drop { background: rgba(95,170,120,.22); border-color: #6fae8a; box-shadow: inset 0 0 8px rgba(110,200,140,.3); }
+.bag-item { border: 1px solid color-mix(in srgb, var(--rc, #c7a24c) 50%, #2a2433); border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center; margin: 1px;
+  background: radial-gradient(circle at 50% 45%, color-mix(in srgb, var(--rc, #c7a24c) 22%, transparent), rgba(8,8,14,.55) 72%); }
+.bag-item.sel { border-color: var(--gold-bright); box-shadow: 0 0 12px rgba(236,205,126,.55); }
+.bag-item.moving { opacity: .4; }
+.bag-ic { width: 82%; height: 82%; image-rendering: pixelated; object-fit: contain; }
+.loot-row .sz { font-size: 10px; color: var(--muted); font-family: var(--f-head); margin-left: auto; }
 .bag-actions { margin-top: 12px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding-top: 10px; border-top: 1px solid var(--line); }
 .eqrow { display: flex; align-items: center; gap: 8px; padding: 7px 0; border-bottom: 1px solid rgba(90,74,40,.18); flex-wrap: wrap; }
 .eqrow .eqlbl { width: 48px; font-size: 11px; color: var(--gold); font-family: var(--f-head); flex-shrink: 0; }

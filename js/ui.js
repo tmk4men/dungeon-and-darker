@@ -496,11 +496,11 @@ const UI = {
     const info = document.getElementById('runinfo');
     if (info) {
       const cu = (typeof Sprites !== 'undefined') ? Sprites.coinURL() : '';
-      const html = `${realmName(game.floor)}　撃破 ${game.run.kills}　戦利品 ${game.run.bag.filter(Boolean).length}/${game.run.bag.length}　${cu ? `<img class="coin-i" src="${cu}">` : '金'}${game.run.gold}`;
+      const html = `${realmName(game.floor)}　撃破 ${game.run.kills}　戦利品 ${game.run.bag.items.length}　空${bagFreeCells(game.run.bag)}　${cu ? `<img class="coin-i" src="${cu}">` : '金'}${game.run.gold}`;
       if (this._lastRun !== html) { info.innerHTML = html; this._lastRun = html; }
     }
     const bb = document.getElementById('bagbtn');
-    if (bb && game.run) { const ct = bb.querySelector('.bag-ct'); if (ct) ct.textContent = game.run.bag.filter(Boolean).length + '/' + game.run.bag.length; }
+    if (bb && game.run) { const ct = bb.querySelector('.bag-ct'); if (ct) ct.textContent = bagFreeCells(game.run.bag) + 'マス'; }
     const ib = document.getElementById('interactbtn');
     if (ib) {
       const channeling = game.channel && game.channel.kind;
@@ -540,35 +540,53 @@ const UI = {
     }
   },
 
-  // -------- バッグ（マス制インベントリ・ダンジョン中） --------
+  // -------- バッグ（マス制・多マス占有／ダンジョン中） --------
   showBag(game) {
     this.hud.style.display = 'none';
     const p = Game.profile;
     const bag = game.run.bag;
-    const free = bag.filter(x => !x).length;
-    const icon = (it) => { const u = Sprites.iconURL(it); return u ? `<img class="bag-ic" src="${u}" alt="">` : ''; };
+    const free = bagFreeCells(bag);
+    const ic = (it) => { const u = Sprites.iconURL(it); return u ? `<img class="bag-ic" src="${u}" alt="">` : ''; };
 
-    // 取得元：宝箱の中身 or 足元の戦利品
+    // 取得元
     const chest = game.bagChest;
     let srcTitle, src;
     if (chest && chest.contents && chest.contents.length) { srcTitle = '宝箱の中身'; src = chest.contents.map(it => ({ from: 'chest', item: it })); }
-    else { srcTitle = '足元の戦利品'; src = game.groundItems.filter(g => dist(game.player.x, game.player.y, g.x, g.y) < 110).map(g => ({ from: 'ground', item: g.item })); }
+    else { srcTitle = '足元の戦利品'; src = game.groundItems.filter(g => dist(game.player.x, game.player.y, g.x, g.y) < 120).map(g => ({ from: 'ground', item: g.item })); }
     this._bagSrc = src;
-
     const srcHtml = src.length
-      ? src.map((s, i) => `<div class="loot-row">${this.rarityTag(s.item)}<button class="btn sm take" data-i="${i}">拾う</button></div>`).join('') + (src.length > 1 ? '<button class="btn sm takeall">空きの分だけ全部拾う</button>' : '')
+      ? src.map((s, i) => `<div class="loot-row">${this.rarityTag(s.item)}<span class="sz">${itemSize(s.item)[0]}×${itemSize(s.item)[1]}</span><button class="btn sm take" data-i="${i}">拾う</button></div>`).join('') + (src.length > 1 ? '<button class="btn sm takeall">入る分だけ拾う</button>' : '')
       : '<div class="muted">なし</div>';
 
-    const gridHtml = bag.map((it, i) => `<div class="bag-cell ${it ? 'has' : ''} ${this.bagSel === i ? 'sel' : ''}" data-i="${i}" ${it ? `style="--rc:${RARITY[it.rarity].color}"` : ''}>${it ? icon(it) : ''}</div>`).join('');
+    const moving = this.bagMove || null; // 移動中のentry
+    // セル背景（空きマス＝移動先候補）
+    let cells = '';
+    for (let y = 0; y < bag.h; y++) for (let x = 0; x < bag.w; x++) {
+      const drop = moving ? bagFits(bag, x, y, moving.w, moving.h, moving) : false;
+      cells += `<div class="bag-cell ${moving && drop ? 'drop' : ''}" data-x="${x}" data-y="${y}" style="grid-column:${x + 1};grid-row:${y + 1}"></div>`;
+    }
+    // アイテム（マスをまたいで配置）
+    let items = '';
+    for (let k = 0; k < bag.items.length; k++) {
+      const e = bag.items[k];
+      const selc = (this.bagSel === e) ? 'sel' : '';
+      const movc = (moving === e) ? 'moving' : '';
+      items += `<div class="bag-item ${selc} ${movc}" data-k="${k}" style="grid-column:${e.x + 1}/span ${e.w};grid-row:${e.y + 1}/span ${e.h};--rc:${RARITY[e.item.rarity].color}">${ic(e.item)}</div>`;
+    }
 
     let actHtml = '';
-    const sel = (this.bagSel != null) ? bag[this.bagSel] : null;
-    if (sel) {
-      const eq = ['weapon', 'head', 'chest', 'hands', 'legs', 'ring', 'torch'].includes(sel.slot);
-      actHtml = `<div class="bag-actions">${this.rarityTag(sel)}
-        ${eq ? '<button class="btn sm bequip">装備する</button>' : ''}
-        ${sel.slot === 'potion' ? '<button class="btn sm buse">使う</button><button class="btn sm bslot">薬枠へ</button>' : ''}
+    const sel = this.bagSel;
+    if (sel && bag.items.includes(sel)) {
+      const it = sel.item;
+      const eq = ['weapon', 'head', 'chest', 'hands', 'legs', 'ring', 'torch'].includes(it.slot);
+      actHtml = `<div class="bag-actions">${this.rarityTag(it)}
+        <button class="btn sm bmove">${moving === sel ? '移動をやめる' : '移動'}</button>
+        ${sel.w !== sel.h ? '<button class="btn sm brot">回転</button>' : ''}
+        ${eq ? '<button class="btn sm bequip">装備</button>' : ''}
+        ${it.slot === 'potion' ? '<button class="btn sm buse">使う</button><button class="btn sm bslot">薬枠へ</button>' : ''}
         <button class="btn sm danger bdrop">捨てる</button></div>`;
+    } else if (moving) {
+      actHtml = `<div class="bag-actions"><span class="muted">緑のマスをタップして置く</span><button class="btn sm bmove">やめる</button></div>`;
     }
 
     const eqHtml = ['weapon', 'head', 'chest', 'hands', 'legs', 'ring', 'torch'].map(s => {
@@ -577,32 +595,33 @@ const UI = {
     }).join('');
 
     this.panel(`<div class="bag-screen">
-      <div class="bag-top"><b>持ち物</b><span class="muted">空き ${free}/${bag.length}　${chest ? '（宝箱を開封中）' : ''}</span><button class="btn sm bagclose">閉じる</button></div>
+      <div class="bag-top"><b>持ち物</b><span class="muted">空き ${free}マス${chest ? '　（宝箱を開封中）' : ''}</span><button class="btn sm bagclose">閉じる</button></div>
       <div class="bag-cols">
+        <div class="bag-pane"><h3>${srcTitle}</h3>${srcHtml}</div>
         <div class="bag-pane">
-          <h3>${srcTitle}</h3>${srcHtml}
-        </div>
-        <div class="bag-pane">
-          <h3>バッグ（タップで選択）</h3>
-          <div class="bag-grid" style="grid-template-columns:repeat(${CONFIG.BAG_W},1fr)">${gridHtml}</div>
+          <h3>バッグ ${bag.w}×${bag.h}（タップで選択・移動）</h3>
+          <div class="bag-grid" style="grid-template-columns:repeat(${bag.w},1fr);grid-template-rows:repeat(${bag.h},1fr);aspect-ratio:${bag.w}/${bag.h}">${cells}${items}</div>
           ${actHtml}
         </div>
-        <div class="bag-pane">
-          <h3>装備</h3>${eqHtml}
-        </div>
+        <div class="bag-pane"><h3>装備</h3>${eqHtml}</div>
       </div>
     </div>`);
 
     const refresh = () => this.showBag(game);
-    const bc = this.root.querySelector('.bagclose'); if (bc) bc.addEventListener('click', () => { this.bagSel = null; Game.closeBag(); });
-    this.root.querySelectorAll('.take').forEach(b => b.addEventListener('click', () => { const s = this._bagSrc[+b.dataset.i]; if (s) Game.takeLoot(s.from === 'chest' ? game.bagChest : 'ground', s.item); refresh(); }));
-    const ta = this.root.querySelector('.takeall'); if (ta) ta.addEventListener('click', () => { for (const s of this._bagSrc.slice()) { if (Game.bagFreeIndex() < 0) break; Game.takeLoot(s.from === 'chest' ? game.bagChest : 'ground', s.item); } refresh(); });
-    this.root.querySelectorAll('.bag-cell').forEach(b => b.addEventListener('click', () => { const i = +b.dataset.i; this.bagSel = (bag[i] ? i : null); refresh(); }));
+    const bc = this.root.querySelector('.bagclose'); if (bc) bc.addEventListener('click', () => { this.bagSel = null; this.bagMove = null; Game.closeBag(); });
+    this.root.querySelectorAll('.take').forEach(b => b.addEventListener('click', () => { const s = this._bagSrc[+b.dataset.i]; if (s) Game.takeLoot(s.from === 'chest' ? game.bagChest : 'ground', s.item); this.bagSel = null; this.bagMove = null; refresh(); }));
+    const ta = this.root.querySelector('.takeall'); if (ta) ta.addEventListener('click', () => { for (const s of this._bagSrc.slice()) Game.takeLoot(s.from === 'chest' ? game.bagChest : 'ground', s.item); this.bagSel = null; this.bagMove = null; refresh(); });
+    // アイテムをタップ：移動中なら別アイテム選択に切替、通常は選択
+    this.root.querySelectorAll('.bag-item').forEach(b => b.addEventListener('click', () => { const e = bag.items[+b.dataset.k]; if (this.bagMove && this.bagMove !== e) { this.bagMove = null; } this.bagSel = e; refresh(); }));
+    // 空きマスをタップ：移動中なら設置
+    this.root.querySelectorAll('.bag-cell').forEach(b => b.addEventListener('click', () => { if (this.bagMove) { if (Game.bagMove(this.bagMove, +b.dataset.x, +b.dataset.y)) { this.bagSel = this.bagMove; this.bagMove = null; } } else { this.bagSel = null; } refresh(); }));
     const A = (cls, fn) => { const el = this.root.querySelector(cls); if (el) el.addEventListener('click', () => { fn(); refresh(); }); };
-    A('.bequip', () => { Game.bagEquip(this.bagSel); this.bagSel = null; });
-    A('.buse', () => { Game.bagUse(this.bagSel); this.bagSel = null; });
-    A('.bslot', () => { Game.bagToPotionSlot(this.bagSel); this.bagSel = null; });
-    A('.bdrop', () => { Game.bagDrop(this.bagSel); this.bagSel = null; });
+    A('.bmove', () => { this.bagMove = (this.bagMove === sel) ? null : sel; });
+    A('.brot', () => { Game.bagRotate(sel); });
+    A('.bequip', () => { Game.bagEquip(sel); this.bagSel = null; this.bagMove = null; });
+    A('.buse', () => { Game.bagUse(sel); this.bagSel = null; });
+    A('.bslot', () => { Game.bagToPotionSlot(sel); this.bagSel = null; });
+    A('.bdrop', () => { Game.bagDrop(sel); this.bagSel = null; this.bagMove = null; });
     this.root.querySelectorAll('.unequip').forEach(b => b.addEventListener('click', () => { Game.bagUnequip(b.closest('.eqrow').dataset.slot); refresh(); }));
   },
 
