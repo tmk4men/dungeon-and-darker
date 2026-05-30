@@ -229,7 +229,7 @@ button { font-family: inherit; cursor: pointer; color: var(--ink); }
 .exbar { width: 230px; height: 13px; background: #0a0604; border: 1px solid #000; border-radius: 3px; overflow: hidden; box-shadow: 0 0 0 1px var(--line2); }
 .exbar > div { height: 100%; background: linear-gradient(90deg, #2c63a8, #aee7ff); }
 
-#skillbar { position: absolute; right: max(10px, env(safe-area-inset-right)); bottom: max(12px, env(safe-area-inset-bottom)); display: flex; flex-direction: column; align-items: flex-end; gap: clamp(5px, 1.2vmin, 8px); }
+#skillbar { position: absolute; left: 50%; transform: translateX(-50%); bottom: max(14px, env(safe-area-inset-bottom)); display: flex; flex-direction: row; align-items: center; gap: clamp(8px, 2vmin, 16px); }
 .skillrow, .potrow { display: flex; gap: clamp(5px, 1.2vmin, 8px); }
 .skbtn { position: relative; width: clamp(46px, 9vmin, 62px); height: clamp(46px, 9vmin, 62px); border-radius: 6px;
   background: linear-gradient(180deg, #221a0e, #120c06); border: 2px solid var(--line2);
@@ -242,7 +242,7 @@ button { font-family: inherit; cursor: pointer; color: var(--ink); }
 .potbtn { width: clamp(38px, 7.4vmin, 50px); height: clamp(38px, 7.4vmin, 50px); border-radius: 6px; background: linear-gradient(180deg, #221a0e, #120c06); border: 2px solid var(--line2); display: flex; flex-direction: column; align-items: center; justify-content: center; box-shadow: inset 0 0 12px rgba(0,0,0,.5); }
 .potbtn.empty { opacity: .38; } .potic { font-size: clamp(15px, 3vmin, 18px); } .potlbl { font-size: clamp(7px, 1.3vmin, 8px); color: var(--muted); }
 
-.dodgebtn { position: absolute; bottom: max(14px, env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%);
+.dodgebtn { position: absolute; bottom: calc(max(14px, env(safe-area-inset-bottom)) + clamp(76px, 16vmin, 100px)); left: 50%; transform: translateX(-50%);
   width: clamp(54px, 11vmin, 74px); height: clamp(54px, 11vmin, 74px); border-radius: 50%; font-family: var(--f-head);
   background: radial-gradient(circle at 50% 35%, #2a3650, #141b2a); border: 2px solid #4a6a9a;
   color: #cfe0ff; font-size: clamp(11px, 2.2vmin, 14px); font-weight: 600; letter-spacing: .5px; display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -251,18 +251,18 @@ button { font-family: inherit; cursor: pointer; color: var(--ink); }
 .dodgebtn.cool { opacity: .38; filter: grayscale(.5); }
 .dodgebtn:active { transform: translateX(-50%) scale(.92); }
 
-.interactbtn { position: absolute; bottom: calc(max(14px, env(safe-area-inset-bottom)) + clamp(60px, 12vmin, 84px)); left: 50%; transform: translateX(-50%);
+.interactbtn { position: absolute; bottom: calc(max(14px, env(safe-area-inset-bottom)) + clamp(150px, 30vmin, 184px)); left: 50%; transform: translateX(-50%);
   display: none; font-family: var(--f-head); background: radial-gradient(circle at 50% 30%, #3a2a55, #1e1430); border: 2px solid #9b7bff; color: #e6d8ff; border-radius: 22px;
   padding: 10px 18px; font-size: 13px; font-weight: 600; letter-spacing: .5px; pointer-events: auto; box-shadow: 0 0 18px rgba(150,110,255,.45);
   animation: zonePulse 1.2s ease-in-out infinite; }
 
-.hint { position: absolute; bottom: 16px; font-size: 11px; color: rgba(234,220,192,.22); pointer-events: none; font-family: var(--f-flavor); font-style: italic; }
-.left-hint { left: 16%; } .right-hint { left: 50%; transform: translateX(-50%); bottom: 6px; }
+.hint { display: none; }
 
 #toast { position: absolute; top: 13%; left: 50%; transform: translateX(-50%); background: linear-gradient(180deg, rgba(24,18,10,.95), rgba(12,9,5,.95)); border: 1px solid var(--gold); color: var(--gold-bright); padding: 9px 20px; border-radius: 3px; font-size: 13px; font-weight: 600; font-family: var(--f-flavor); opacity: 0; transition: opacity .3s; z-index: 40; pointer-events: none; white-space: nowrap; box-shadow: 0 4px 20px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,220,150,.12); }
 
-#rotate { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; background: #0a0806; color: var(--gold-bright); font-size: 18px; z-index: 100; text-align: center; font-family: var(--f-flavor); }
-@media (orientation: portrait) and (max-width: 900px) { #rotate { display: flex; } }
+/* 縦持ちは #app を90°回転して横画面化するため、回転案内は不要 */
+#rotate { display: none !important; }
+#app { transform-origin: 0 0; }
 
 /* ---------- responsive: 背の低い横画面・小画面 ---------- */
 @media (max-height: 480px) {

@@ -1,0 +1,12 @@
+{
+  "name": "Dungeon & Darker",
+  "short_name": "DaD",
+  "description": "ダークファンタジー 2D俯瞰エクストラクションRPG",
+  "display": "standalone",
+  "orientation": "landscape",
+  "background_color": "#0c0a08",
+  "theme_color": "#0c0a08",
+  "start_url": "./",
+  "scope": "./",
+  "lang": "ja"
+}

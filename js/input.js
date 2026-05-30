@@ -27,14 +27,18 @@ const Input = {
     });
     window.addEventListener('keyup', e => { this.keys[e.key.toLowerCase()] = false; });
     canvas.addEventListener('mousemove', e => {
-      const r = canvas.getBoundingClientRect();
-      this.mouse.x = (e.clientX - r.left) / r.width * CONFIG.VIEW_W;
-      this.mouse.y = (e.clientY - r.top) / r.height * CONFIG.VIEW_H;
+      const p = this.clientToLogical(e);
+      this.mouse.x = p.x; this.mouse.y = p.y;
     });
     canvas.addEventListener('contextmenu', e => e.preventDefault());
   },
 
   clientToLogical(e) {
+    const W = window.innerWidth, H = window.innerHeight;
+    // 縦持ち時は #app が rotate(-90deg)/origin left top/top:100% で横画面化されている
+    if (H > W) {
+      return { x: (H - e.clientY) / H * CONFIG.VIEW_W, y: e.clientX / W * CONFIG.VIEW_H };
+    }
     const r = this.canvas.getBoundingClientRect();
     return { x: (e.clientX - r.left) / r.width * CONFIG.VIEW_W, y: (e.clientY - r.top) / r.height * CONFIG.VIEW_H };
   },
@@ -98,19 +102,40 @@ const Input = {
     this.aimVec.x = this.right.dx; this.aimVec.y = this.right.dy;
   },
 
+  // 定位置（タッチしていない時に表示するベースの中心）
+  homePos() {
+    return {
+      left: { x: CONFIG.VIEW_W * 0.13, y: CONFIG.VIEW_H * 0.75 },
+      right: { x: CONFIG.VIEW_W * 0.87, y: CONFIG.VIEW_H * 0.75 },
+    };
+  },
+
   drawSticks(ctx) {
-    const drawStick = (s, color) => {
-      if (s.id === null) return;
+    const home = this.homePos();
+    // 非アクティブ時はベースを薄く常時表示（スティックの存在を明示）
+    const drawBase = (cx, cy, color, label) => {
       ctx.save();
-      ctx.globalAlpha = 0.5;
+      ctx.globalAlpha = 0.22;
+      ctx.strokeStyle = color; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(cx, cy, this.R, 0, TAU); ctx.stroke();
+      ctx.fillStyle = color; ctx.globalAlpha = 0.16;
+      ctx.beginPath(); ctx.arc(cx, cy, this.R * 0.42, 0, TAU); ctx.fill();
+      ctx.globalAlpha = 0.5; ctx.fillStyle = color;
+      ctx.font = 'bold 16px "Shippori Mincho B1", serif'; ctx.textAlign = 'center';
+      ctx.fillText(label, cx, cy + this.R + 22);
+      ctx.restore();
+    };
+    const drawStick = (s, color) => {
+      ctx.save();
+      ctx.globalAlpha = 0.6;
       ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 3;
       ctx.beginPath(); ctx.arc(s.ox, s.oy, this.R, 0, TAU); ctx.stroke();
       ctx.fillStyle = color;
       ctx.beginPath(); ctx.arc(s.ox + s.dx, s.oy + s.dy, this.R * 0.42, 0, TAU); ctx.fill();
       ctx.restore();
     };
-    drawStick(this.left, '#7fbfff');
-    drawStick(this.right, '#ff9f6b');
+    if (this.left.id === null) drawBase(home.left.x, home.left.y, '#7fbfff', '移動'); else drawStick(this.left, '#7fbfff');
+    if (this.right.id === null) drawBase(home.right.x, home.right.y, '#ff9f6b', '攻撃／狙う'); else drawStick(this.right, '#ff9f6b');
     // 右スティック：照準ライン
     if (this.right.id !== null && this.aimVec.len > 0.12) {
       ctx.save(); ctx.globalAlpha = 0.6;

@@ -267,11 +267,9 @@ const UI = {
         <p class="warn">死亡すると持ち込んだ装備・ポーション・取得品は全て失われます。脱出ポータルから帰還して初めて戦利品が確定します。</p>
       </div></div>
       <div class="col"><div class="card">
-        <h3>潜入する階層を選択</h3>
-        <button class="btn big depth" data-f="1">第1層 — 浅層（易）</button>
-        <button class="btn big depth" data-f="2">第2層 — 中層（中・ボス出現）</button>
-        <button class="btn big depth" data-f="3">第3層 — 深層（難・強ボス）</button>
-        <p class="muted" style="margin-top:10px">深いほど敵が強く、レア戦利品とゴールドが増えます。</p>
+        <h3>出撃</h3>
+        <button class="btn big enterdungeon">ダンジョンへ潜入</button>
+        <p class="muted" style="margin-top:10px">ひとつながりのダンジョンです。各階にある<b>「下り階段」</b>で深く潜るほど、敵が強くなり戦利品のレア度とゴールドが増えます。脱出ポータルからはいつでも帰還でき、深く潜ってから帰るほど高リスク高報酬です。</p>
       </div></div>
     </div>`;
   },
@@ -351,7 +349,7 @@ const UI = {
       }
     }));
     // 出撃
-    this.root.querySelectorAll('.depth').forEach(b => b.addEventListener('click', () => { this.hideAll(); Game.enterDungeon(+b.dataset.f); }));
+    this.root.querySelectorAll('.enterdungeon').forEach(b => b.addEventListener('click', () => { this.hideAll(); Game.enterDungeon(); }));
   },
 
   equipItem(uid) {
@@ -415,12 +413,13 @@ const UI = {
     if (ht) ht.textContent = `${Math.max(0, Math.round(p.hp))}/${Math.round(d.hpmax)}`;
     if (mt) mt.textContent = `${Math.round(p.mp)}/${Math.round(d.mpmax)}`;
     const info = document.getElementById('runinfo');
-    if (info) info.textContent = `第${game.floor}層　撃破 ${game.run.kills}　戦利品 ${game.run.loot.length}　金 ${game.run.gold}`;
+    if (info) info.textContent = `地下${game.floor}階　撃破 ${game.run.kills}　戦利品 ${game.run.loot.length}　金 ${game.run.gold}`;
     const db = document.getElementById('dodgebtn');
     if (db) db.classList.toggle('cool', p.dodgeCd > 0);
     const ib = document.getElementById('interactbtn');
     if (ib) {
-      if (game.nearAltar) { ib.style.display = 'block'; ib.textContent = (game.nearAltar.type === 'sacrifice' ? '捧げる' : '祈る'); }
+      if (game.nearStairs) { ib.style.display = 'block'; ib.textContent = '降りる'; }
+      else if (game.nearAltar) { ib.style.display = 'block'; ib.textContent = (game.nearAltar.type === 'sacrifice' ? '捧げる' : '祈る'); }
       else ib.style.display = 'none';
     }
     const zi = document.getElementById('zoneinfo');

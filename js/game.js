@@ -57,20 +57,17 @@ const Game = {
     UI.showTown();
   },
 
-  // ---------- ダンジョン突入 ----------
-  enterDungeon(floor) {
-    this.floor = floor;
+  // ---------- ダンジョン突入（深度1から。階段で潜るほど難化＆高レア化） ----------
+  enterDungeon() {
+    this.floor = 1;
     this.derived = computeDerived(this.profile);
-    this.dgn = genDungeon(floor, this.derived);
     this.run = { loot: [], kills: 0, gold: 0, startGold: this.profile.gold };
     this.selectedSkill = -1;
-    this.projectiles = []; this.particles = []; this.floatTexts = []; this.extractT = 0;
-    this.runTime = 0;
 
     // プレイヤー生成（持ち込み装備のスナップショット）
     const d = this.derived;
     this.player = {
-      x: this.dgn.startX, y: this.dgn.startY, vx: 0, vy: 0, facing: -Math.PI / 2,
+      x: 0, y: 0, vx: 0, vy: 0, facing: -Math.PI / 2,
       hp: d.hpmax, mp: d.mpmax, derived: d, classId: this.profile.classId,
       skillCd: [0, 0], attackCd: 0, potionCd: 0, invuln: 0, buffs: [], dead: false,
       slowT: 0, slowMul: 1, zoneTick: 0, dodgeCd: 0, dodgeT: 0, dodgeDir: 0, dotT: 0, dotDmg: 0, dotAcc: 0,
@@ -78,15 +75,7 @@ const Game = {
       potions: this.profile.potions.map(p => p ? { ...p } : null),
     };
 
-    // 敵生成
-    this.enemies = this.dgn.enemySpawns.map(sp => this.makeEnemy(sp.type, sp.x, sp.y));
-    this.groundItems = this.dgn.groundItems.slice();
-    this.chests = this.dgn.chests.slice();
-    this.traps = this.dgn.traps.slice();
-    this.altars = this.dgn.altars.slice();
-    this.nearAltar = null;
-    this.initZone();
-    Audio2.init();
+    this.buildLevel();
 
     this.state = 'dungeon';
     Input.enabled = true; Input.reset();
@@ -94,7 +83,34 @@ const Game = {
     Input.aimChange = (ang) => { this.player.facing = ang; };
     UI.showHUD();
     UI.buildSkillBar(this);
-    this.toast(`ダンジョン 第${floor}層へ — 生きて脱出せよ`);
+    this.toast('ダンジョンへ潜入 — 生きて脱出せよ');
+  },
+
+  // 現在の深度でレベルを生成（プレイヤー状態は維持）
+  buildLevel() {
+    this.dgn = genDungeon(this.floor, this.derived);
+    this.projectiles = []; this.particles = []; this.floatTexts = []; this.extractT = 0;
+    this.runTime = 0;
+    this.enemies = this.dgn.enemySpawns.map(sp => this.makeEnemy(sp.type, sp.x, sp.y));
+    this.groundItems = this.dgn.groundItems.slice();
+    this.chests = this.dgn.chests.slice();
+    this.traps = this.dgn.traps.slice();
+    this.altars = this.dgn.altars.slice();
+    this.stairs = this.dgn.stairs;
+    this.nearAltar = null; this.nearStairs = null;
+    this.player.x = this.dgn.startX; this.player.y = this.dgn.startY;
+    this.player.dodgeT = 0; this.player.invuln = 0.6; // 到着直後の保護
+    this.initZone();
+    Audio2.init();
+  },
+
+  // 階段で1つ深く潜る（難易度・レア度UP、装備/HP/戦利品は維持）
+  descend() {
+    this.floor++;
+    this.player.derived = this.derived;
+    this.buildLevel();
+    Audio2.play('door');
+    this.toast('地下' + this.floor + '階へ降りた — 敵もお宝も手強くなる');
   },
 
   makeEnemy(type, x, y, forceElite) {
@@ -764,17 +780,19 @@ const Game = {
     }
   },
 
-  // 祭壇/聖域の相互作用判定（近接時）
+  // 祭壇/聖域/階段の相互作用判定（近接時）
   updateAltars() {
     const p = this.player;
-    this.nearAltar = null;
+    this.nearAltar = null; this.nearStairs = null;
     for (const a of this.altars) {
       if (a.used) continue;
       if (dist(p.x, p.y, a.x, a.y) < a.r + CONFIG.PLAYER_R + 8) { this.nearAltar = a; break; }
     }
+    if (this.stairs && dist(p.x, p.y, this.stairs.x, this.stairs.y) < this.stairs.r + CONFIG.PLAYER_R + 8) this.nearStairs = this.stairs;
   },
 
   interact() {
+    if (this.nearStairs) { this.descend(); return; }
     const a = this.nearAltar;
     if (!a || a.used) return;
     const p = this.player;

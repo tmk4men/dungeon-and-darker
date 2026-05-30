@@ -194,6 +194,10 @@ function genDungeon(floor, derived) {
   if (altarRooms[0]) altars.push({ type: 'sacrifice', x: (altarRooms[0].ccx + 0.5) * CONFIG.TILE, y: (altarRooms[0].ccy + 0.5) * CONFIG.TILE, used: false, r: 24 });
   if (altarRooms[1]) altars.push({ type: 'shrine', x: (altarRooms[1].ccx + 0.5) * CONFIG.TILE, y: (altarRooms[1].ccy + 0.5) * CONFIG.TILE, used: false, r: 24 });
 
+  // --- 下り階段（潜るほど難易度・レア度UP） ---
+  const stairsRoom = altarRooms[2] || bonusRoom || mainRoom;
+  const stairs = { x: (stairsRoom.ccx + 0.5) * CONFIG.TILE, y: (stairsRoom.ccy + 0.5) * CONFIG.TILE, r: 26 };
+
   // --- ライバル冒険者（PvPvE風味） ---
   if (chance(0.6)) {
     const cand = shuffle(rooms.filter(r => r !== start && r !== bossRoom));
@@ -204,7 +208,7 @@ function genDungeon(floor, derived) {
   const theme = THEMES[themeKey];
 
   return {
-    floor, W, H, tiles, rooms, lights, portal, portals, traps, altars, theme, themeKey,
+    floor, W, H, tiles, rooms, lights, portal, portals, traps, altars, stairs, theme, themeKey,
     get, set,
     startX: (start.ccx + 0.5) * CONFIG.TILE,
     startY: (start.ccy + 0.5) * CONFIG.TILE,

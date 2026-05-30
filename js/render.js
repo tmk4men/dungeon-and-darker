@@ -11,23 +11,46 @@ const Render = {
     this.ctx = canvas.getContext('2d');
     this.light = document.createElement('canvas');
     this.lctx = this.light.getContext('2d');
+    this.app = document.getElementById('app');
     this.resize();
     window.addEventListener('resize', () => this.resize());
+    window.addEventListener('orientationchange', () => setTimeout(() => this.resize(), 80));
+  },
+
+  // 縦持ち時は #app を90°回転して横画面表示にする（座標補正は input.js 側）
+  applyOrientation() {
+    const app = this.app;
+    if (!app) return;
+    const W = window.innerWidth, H = window.innerHeight;
+    if (H > W) {
+      app.style.position = 'fixed'; app.style.top = '0'; app.style.left = '0';
+      app.style.width = H + 'px'; app.style.height = W + 'px';
+      app.style.transformOrigin = '0 0';
+      app.style.transform = `translate(0px, ${H}px) rotate(-90deg)`;
+    } else {
+      app.style.position = ''; app.style.top = ''; app.style.left = '';
+      app.style.width = ''; app.style.height = '';
+      app.style.transformOrigin = ''; app.style.transform = '';
+    }
   },
 
   resize() {
-    const w = window.innerWidth, h = window.innerHeight;
+    this.applyOrientation();
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    // 縦の見える範囲（ズーム）を一定に保ち、横は画面比で可変＝歪まず画面にフィット
+    // 縦持ち時は #app を90°回転して横画面表示する。
+    // よって論理サイズは常に「実画面の長辺×短辺」=横長で計算する。
+    let dw = window.innerWidth, dh = window.innerHeight;
+    if (dh > dw) { const t = dw; dw = dh; dh = t; }
     const baseH = CONFIG.BASE_H;
-    const aspect = clamp(w / Math.max(1, h), 1.0, 3.0);
+    const aspect = clamp(dw / Math.max(1, dh), 1.0, 3.0);
     const W = Math.round(baseH * aspect);
     CONFIG.VIEW_W = W;
     CONFIG.VIEW_H = baseH;
     this.canvas.width = W * dpr;
     this.canvas.height = baseH * dpr;
-    this.canvas.style.width = w + 'px';
-    this.canvas.style.height = h + 'px';
+    // 実際の表示サイズは回転後の #app（100%×100%）に追従させる
+    this.canvas.style.width = '100%';
+    this.canvas.style.height = '100%';
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     this.light.width = W;
     this.light.height = baseH;
@@ -82,6 +105,9 @@ const Render = {
 
     // --- 祭壇/聖域 ---
     if (game.altars) for (const a of game.altars) this.drawAltar(ctx, a, game);
+
+    // --- 下り階段 ---
+    if (game.stairs) this.drawStairs(ctx, game.stairs, game);
 
     // --- トラップ ---
     if (game.traps) for (const tr of game.traps) this.drawTrap(ctx, tr);
@@ -251,6 +277,29 @@ const Render = {
       ctx.fillStyle = '#cfcfd6'; ctx.font = 'bold 11px sans-serif'; ctx.textAlign = 'center';
       ctx.fillText('封 ' + Math.ceil(portal.openAt - game.runTime) + 's', 0, -R - 4);
     }
+    ctx.restore();
+  },
+
+  drawStairs(ctx, st, game) {
+    const s = this.worldToScreen(st.x, st.y);
+    ctx.save(); ctx.translate(s.x, s.y);
+    ctx.fillStyle = 'rgba(0,0,0,0.4)';
+    ctx.beginPath(); ctx.ellipse(0, 18, 26, 8, 0, 0, TAU); ctx.fill();
+    // 穴
+    ctx.fillStyle = 'rgba(4,4,8,0.95)';
+    ctx.fillRect(-22, -16, 44, 34);
+    // 降りていく段
+    for (let i = 0; i < 4; i++) {
+      const w = 40 - i * 8;
+      const c = 54 - i * 12;
+      ctx.fillStyle = `rgb(${c},${c - 6},${c - 12})`;
+      ctx.fillRect(-w / 2, -14 + i * 8, w, 7);
+    }
+    const gl = 0.4 + Math.sin(game.time * 3) * 0.2;
+    ctx.strokeStyle = hexA('#9fd0ff', gl); ctx.lineWidth = 2;
+    ctx.strokeRect(-22, -16, 44, 34);
+    ctx.fillStyle = '#bfe0ff'; ctx.font = 'bold 11px "Cinzel", serif'; ctx.textAlign = 'center';
+    ctx.fillText('下り階段', 0, -23);
     ctx.restore();
   },
 
@@ -466,6 +515,10 @@ const Render = {
       if (a.used) continue;
       ctx.fillStyle = a.type === 'sacrifice' ? '#c43b5e' : '#7fb0ff';
       ctx.beginPath(); ctx.arc(x0 + a.x * sx, y0 + a.y * sy, 2, 0, TAU); ctx.fill();
+    }
+    if (game.stairs) {
+      ctx.fillStyle = '#bfe0ff';
+      ctx.fillRect(x0 + game.stairs.x * sx - 2.5, y0 + game.stairs.y * sy - 2.5, 5, 5);
     }
     // ライバル
     for (const e of game.enemies) {
